@@ -1,0 +1,73 @@
+/* Home Component Styles */
+.hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+    background-image: url('../assets/shopping-cart-dark-background-with-copy-space_23-2148283846.jpg'); /* Optional: Add a background image */
+    background-size: cover;
+    background-position: center;
+  }
+  
+  .hero-content {
+    flex: 1;
+    color: white;
+    text-align: left;
+    z-index: 2;
+  }
+  
+  .hero-text {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+    letter-spacing: 1.8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: red;
+    text-align: center;
+  }
+
+  .hero-text span {
+    color: #007bff;
+  }
+  
+  .hero-description {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    color: white;
+    margin-left: 7rem;
+    width: 80%;
+  }
+  
+  .hero-image {
+    flex: 1;
+    background-image: url('/path-to-your-image.jpg'); /* Adjust the path as necessary */
+    background-size: cover;
+    background-position: center;
+    height: 100%;
+    max-width: 100%;
+    border-radius: 8px;
+    z-index: 1;
+  }
+  
+  /* Media Queries for Responsiveness */
+  
+  /* Tablet and mobile devices */
+  @media (max-width: 768px) {
+    .hero-description{
+      margin-left: 0;
+      width: 100%;
+    }
+
+    .hero {
+      background-image: url(../assets/shopping-cart-dark.jpg);
+    }
+  }
+
+  

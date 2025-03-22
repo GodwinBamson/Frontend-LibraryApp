@@ -1,0 +1,384 @@
+
+input:focus{
+  outline: none;
+  border: 1px solid #007bff;
+}
+
+select:focus{
+  outline: none;
+  border: 1px solid #007bff;
+}
+
+/* General Styles */
+.inventory-container {
+  padding: 10px;
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+th, td {
+  padding: 6px;
+  border: 1px solid #ddd;
+}
+
+li{
+  padding: 5px;
+  cursor: pointer;
+}
+
+li:hover{
+  background-color: #ddd;
+}
+
+.inventory-container .product-form .responsive-table tbody tr:hover{
+  background-color: #f4f4f4;
+}
+
+.inventory-quantity-container{
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+/* Responsive Table */
+.responsive-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.responsive-table th, .responsive-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.quantity-btn {
+  width: 40px;
+  /* height: 40px; */
+  padding: 5px 16px;
+  color: white;
+  border-radius: 7px;
+  background-color: #007bff;
+  margin-top: 0;
+  text-align: center;
+  display: flex;
+}
+
+.inventory-add-parent{
+  display: flex;
+  gap: 1rem;
+  cursor: pointer;
+  padding: 17px;
+}
+
+.inventory-add-parent button{
+  width: 60px;
+}
+
+.inventory-input{
+  width: 30%;
+  padding: 8px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.inventory-responsive-table thead tr .inresquantity{
+  width: 20%;
+}
+
+.inventory-responsive-table tbody tr{
+  height: 0;
+}
+
+.inventory-remove-btn{
+  background-color: red;
+  margin-top: 0;
+  padding: 5px 10px;
+  width: 21%;
+}
+
+.input-inventory{
+  width: 22%;
+  padding: 5px;
+  text-align: center;
+}
+
+.contain{
+  width: 20%;
+}
+
+.row-name{
+  width: 20%;
+  height: 7vh;
+}
+
+.complete{
+  /* margin-top: -2rem; */
+  width: auto;
+  padding: 10px;
+  height: auto;
+  /* margin-left: 65rem; */
+}
+
+
+/* RECEIPT */
+
+#print-section {
+  width: 30mm; /* Adjust for thermal receipt printer */
+  font-size: 10px; /* Reduce font size */
+  padding: 5px;
+}
+
+#print-section table {
+  width: 80%;
+  font-size: 9px; /* Smaller font for table */
+}
+
+#print-section th, #print-section td {
+  padding: 4px;
+}
+
+
+.total-input{
+  width: 20%;
+  height: 6vh;
+  background-color: white;
+}
+
+.parent{
+  display: flex;
+  justify-content: space-between;
+  padding-top: 1rem;
+}
+
+.quantity-name{
+  width: 30%;
+}
+
+.inventory-cal-input{
+  padding: 0;
+}
+
+.inventory-cal-input:focus{
+  outline: none;
+}
+
+.add-inventory-name span {
+  color: #007bff;
+}
+
+.add-inventory-name {
+  letter-spacing: 1.8px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: red;
+}
+
+#print-section{
+  margin: 0 5rem;
+}
+
+.inventory-print{
+  width: 100%;
+}
+
+.inventory-print-id td{
+  width: 100%;
+}
+
+.icon-name{
+  display: flex;
+  justify-content: center;
+  height: 8.6vh;
+}
+
+@media (max-width: 767px){
+  .inventory-responsive-table tbody tr td{
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .inventory-responsive-table{
+    font-size: 0.7rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    width: 70%;
+  }
+
+  .inventory-add-div{
+    overflow-x: auto;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .inventory-responsive-table thead, tbody{
+    border-color: inherit;
+    border-style: solid;
+    border-width: 0;
+  }
+
+  .inventory-responsive-table thead tr, tbody tr{
+    display: flex;
+  }
+
+  .inventory-responsive-table tbody{
+    display: flex;
+    flex-direction: column;
+    margin-bottom:1rem;
+  }
+
+  .inventory-responsive-table thead tr th{
+    font-size: .9rem;
+    width: 17vw;
+  }
+
+  .inventory-responsive-table thead tr th:first-child{
+    width: 27vw;
+  }
+
+  .inventory-cal-input{
+    width: 100%;
+  }
+
+  .inventory-add-parent{
+    flex-direction: column;
+  }
+
+  .quantity-btn{
+    padding: 3px 17px;
+    color: #007bff;
+    font-weight: 900;
+    /* height: 3vh; */
+    background-color: transparent;
+  }
+
+  .inventory-responsive-table tbody tr{
+    height: auto;
+  }
+
+  .inventory-quantity-container{
+    width: 100%;
+    display: flex;
+    gap: .5rem;
+    flex-direction: column;
+  }
+
+  .input-inventory{
+    width: 100%;
+  }
+
+  .inventory-cal-input {
+    padding: 3px 5px;
+}
+
+th, td {
+  padding: 6px;
+  border: 1px solid #ddd;
+}
+
+.inventory-add-parent{
+  width: 20%;
+  padding: 6px;
+}
+
+.inventory-add-parent input{
+  width: 100%;
+}
+
+.inventory-add-parent button{
+  width: 40px;
+  padding: 3px 6px;
+}
+
+.inven-td-total{
+  width: 40%;
+}
+
+.inven-td-total input{
+  width: 100%;
+}
+
+.row-name{
+  height: auto;
+  width: 100%;
+}
+
+.price-name{
+  width: 50%;
+}
+
+.quantity-name{
+  width: 20%;
+  /* height: 7vh; */
+  padding: 0;
+}
+
+.sum-name{
+  width: 70%;
+}
+
+.inventory-remove-btn{
+  background-color: red;
+  margin-top: 0;
+  padding: 5px 10px;
+  height: 4vh;
+  width: 55%;
+}
+
+.icon-name{
+  width: 20%;
+  height: 12vh;
+}
+
+.amount-column{
+  width: 100vw;
+}
+
+.total-input {
+  width: 23%;
+  height: 4vh;
+}
+
+.complete{
+  background-color: #007bff;
+  color: white;
+  padding-top: 7px;
+}
+}
+
+
+@media (min-width: 767px) and (max-width: 1023px){
+  .inventory-remove-btn{
+    align-self: center;
+    width: 70%;
+    height: 4vh;
+    width: 40%;
+  }
+
+  .complete{
+    background-color: #007bff;
+    color: white;
+    padding-top: 11px;
+    height: 5vh;
+  }
+
+  .inventory-quantity-container{
+    /* flex-direction: column; */
+    padding: 0;
+  }
+
+  .inventory-add-parent{
+    flex-direction: column;
+  }
+
+  .contain{
+    width: 30%;
+  }
+
+  .total-input {
+    width: 20%;
+    height: 4vh;
+    background-color: white;
+}
+}

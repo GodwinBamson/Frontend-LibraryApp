@@ -1,0 +1,304 @@
+/* AddProduct.css */
+
+/* Basic Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Container */
+.container1 {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+/* Heading */
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+/* Search Section */
+.search-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.search-container input {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px;
+  font-size: 16px;
+  margin-right: 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.search-container button {
+  padding: 8px 12px;
+  border: none;
+  background-color: #f44336;
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.search-container button:hover {
+  background-color: #d32f2f;
+}
+
+/* Grid Container */
+.grid-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+/* Table Container */
+.table-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-container th, .table-container td {
+  padding: 10px;
+  text-align: left;
+  border: 1px solid #ddd;
+}
+
+.table-container th {
+  background-color: #f4f4f4;
+}
+
+.table-container button {
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  padding: 5px;
+}
+
+/* Form Container */
+.form-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-container input {
+  padding: 8px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.form-container button {
+  padding: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.form-container button:hover {
+  background-color: #45a049;
+}
+
+.add-product-desrip{
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.add-grid-container{
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 6rem;
+  padding: 0 2rem;
+  justify-content: left;
+}
+
+.add-product-table{
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.add-product-table button{
+  margin-top: 0;
+  padding: 5px 10px;
+  width: 15%;
+}
+
+.add-product-red{
+  background-color: red;
+}
+
+.add-product-column td{
+  padding: 8px;
+}
+
+.add-table-container{
+  width: 60%;
+}
+
+.add-table-container{
+  width: 90vw;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.add-form-container{
+  width: 30%;
+}
+
+.add-search-container{
+  display: flex;
+  justify-content: center;
+  padding-bottom: 1rem;
+}
+
+.add-search-container input{
+  width: 40%;
+}
+
+.add-product-name{
+  letter-spacing: 1.8px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: red;
+}
+
+.add-product-name span{
+  color: #007bff;
+}
+
+.pagination{
+  margin: 0 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+}
+
+.add-product-next{
+  width: 5%;
+  /* font-size: 2rem; */
+  padding: 3px 8px;
+  border-radius: 50px;
+}
+
+.add-product-none{
+  display: none;
+}
+
+.add-product-update{
+  padding: 10px 20px;
+}
+
+/* Responsive Styles */
+@media (max-width: 767px){
+  .add-search-container input{
+    width: 80%;
+  }
+
+  .add-grid-container{
+    flex-direction: column;
+    padding: 0 .6rem;
+    gap: 1.5rem;
+  }
+
+  .add-product-tab{
+    display: flex;
+    gap: 4rem;
+    width: 100%;
+  }
+
+  .add-product-body{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .add-product-column td{
+    text-align: center;
+  }
+
+  .add-product-head{
+    width: 100%;
+    display: flex;
+    padding-bottom: 1rem;
+  }
+
+  .add-column td{
+    display: flex;
+    width: 100%;
+  }
+
+  .add-table-container {
+    width: 100%;
+  }
+
+  .add-product-table button{
+    width: 30%;
+  }
+
+  .add-form-container {
+    width: 100%;
+}
+
+.add-product-next{
+  width: 20%;
+  padding: 8px 8px;
+  border-radius: 50px;
+}
+}
+
+@media (min-width: 767px) and (max-width: 1023px){
+  .add-grid-container{
+    gap: 2rem;
+  }
+
+  .add-form-container {
+    width: 40%;
+}
+
+.add-table-container {
+  width: 70%;
+}
+
+.add-product-table button{
+  width: 25%;
+}
+
+.add-product-next{
+  width: 20%;
+  padding: 8px 8px;
+  border-radius: 50px;
+}
+}
+
+@media (min-width: 1024px){
+  .add-product-next{
+    width: 10%;
+    padding: 8px 8px;
+    border-radius: 50px;
+  }
+
+  .add-grid-container{
+    gap: 2rem;
+  }
+
+  .add-form-container {
+    width: 40%;
+}
+
+.add-table-container {
+  width: 70%;
+}
+
+}
