@@ -10,6 +10,7 @@ import AddProduct from "./Components/AddProduct";
 import Inventory from "./Components/Inventory";
 import ReportPage from "./Components/ReportPage";
 import AdminRegister from "./Components/AdminRegister";
+import { BASE_URL, BASE_URL1 } from "../config";
 
 function App() {
   const [role, setRole] = useState(localStorage.getItem("role") || ""); // Load from localStorage
@@ -29,7 +30,7 @@ function App() {
       }
 
       try {
-        const res = await axios.get("http://localhost:5000/api/auth/verify", {
+        const res = await axios.get(`${BASE_URL}/api/auth/verify`, {
           headers: { Authorization: `Bearer ${token}` }, // Send token in headers
         });
 
