@@ -192,17 +192,11 @@ import axios from "axios";
  * - Production → Render backend
  * - Development → Local backend
  */
-// const API_URL = import.meta.env.PROD
-//   ? "https://library-server-5rpq.onrender.com/api"
-//   : "http://localhost:5000/api";
-
-// console.log("🔧 API Base URL:", API_URL);
-
-const API_URL = "https://library-server-5rpq.onrender.com/api";
+const API_URL = import.meta.env.PROD
+  ? "https://library-server-5rpq.onrender.com/api"
+  : "http://localhost:5000/api";
 
 console.log("🔧 API Base URL:", API_URL);
-console.log("🔧 Environment check - PROD:", import.meta.env.PROD);
-console.log("🔧 MODE:", import.meta.env.MODE);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -212,7 +206,6 @@ const api = axios.create({
     Accept: "application/json",
   },
 });
-
 
 // --------------------
 // Request interceptor
