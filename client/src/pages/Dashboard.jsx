@@ -14,7 +14,8 @@ export default function Dashboard() {
   const fetchBorrowedBooks = async () => {
     try {
       setLoading(true);
-      const response = await borrowAPI.getMyBooks();
+      // const response = await borrowAPI.getMyBooks();
+      const response = await borrowAPI.getUserBorrows();
       setBorrowedBooks(response.data);
     } catch (error) {
       console.error("Error fetching borrowed books:", error);

@@ -330,23 +330,10 @@ export const bookAPI = {
 // --------------------
 // Borrow APIs - ADD THIS SECTION
 // --------------------
-// export const borrowAPI = {
-//   borrowBook: (bookId) => api.post("/borrow", { bookId }),
-//   returnBook: (borrowId) => api.put(`/borrow/${borrowId}/return`),
-//   getUserBorrows: () => api.get("/borrow/my-borrows"),
-//   getAllBorrows: () => api.get("/borrow"),
-//   checkAvailability: (bookId) => api.get(`/borrow/check/${bookId}`),
-//   renewBook: (borrowId) => api.put(`/borrow/${borrowId}/renew`),
-//   getBorrowHistory: (bookId) => api.get(`/borrow/history/${bookId}`),
-// };
-
-// In your api.js, update the borrowAPI object:
 export const borrowAPI = {
   borrowBook: (bookId) => api.post("/borrow", { bookId }),
   returnBook: (borrowId) => api.put(`/borrow/${borrowId}/return`),
   getUserBorrows: () => api.get("/borrow/my-borrows"),
-  // Add this line as a temporary alias
-  getMyBooks: () => api.get("/borrow/my-borrows"), // ⬅️ Add this line
   getAllBorrows: () => api.get("/borrow"),
   checkAvailability: (bookId) => api.get(`/borrow/check/${bookId}`),
   renewBook: (borrowId) => api.put(`/borrow/${borrowId}/renew`),
