@@ -209,75 +209,132 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
   const [pdfData, setPdfData] = useState(null);
   const navigate = useNavigate();
 
+  // useEffect(() => {
+  //   // Check if user is logged in
+  //   const token = localStorage.getItem("token");
+  //   if (!token) {
+  //     navigate("/login");
+  //     return;
+  //   }
+
+  //   // Fetch PDF with authentication
+  //   const fetchPdf = async () => {
+  //     try {
+  //       setLoading(true);
+
+  //       // IMPORTANT FIX: Use no-cors mode and follow redirects
+  //       const response = await fetch(pdfUrl, {
+  //         headers: {
+  //           Authorization: `Bearer ${token}`,
+  //         },
+  //         redirect: 'follow', // Explicitly follow redirects
+  //         mode: 'cors', // Ensure CORS mode
+  //         credentials: 'omit' // Don't send cookies for cross-origin
+  //       });
+
+  //       if (!response.ok) {
+  //         throw new Error(`Failed to load PDF: ${response.status} ${response.statusText}`);
+  //       }
+
+  //       // Get the PDF as blob
+  //       const blob = await response.blob();
+        
+  //       // Verify it's a PDF
+  //       if (!blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
+  //         console.warn('Unexpected content type:', blob.type);
+  //       }
+
+  //       // Create object URL
+  //       const url = URL.createObjectURL(blob);
+  //       setPdfData(url);
+  //       setLoading(false);
+  //     } catch (err) {
+  //       console.error("PDF loading error details:", {
+  //         message: err.message,
+  //         url: pdfUrl,
+  //         stack: err.stack
+  //       });
+        
+  //       // Provide more specific error messages
+  //       if (err.message.includes('Failed to fetch')) {
+  //         setError("Network error - please check your connection and try again");
+  //       } else if (err.message.includes('401')) {
+  //         setError("Authentication failed - please log in again");
+  //       } else if (err.message.includes('404')) {
+  //         setError("PDF file not found");
+  //       } else {
+  //         setError(err.message || "Failed to load PDF file");
+  //       }
+  //       setLoading(false);
+  //     }
+  //   };
+
+  //   fetchPdf();
+
+  //   // Cleanup function
+  //   return () => {
+  //     if (pdfData) {
+  //       URL.revokeObjectURL(pdfData);
+  //     }
+  //   };
+  // }, [pdfUrl, navigate]);
+
+
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
+  const token = localStorage.getItem("token");
+  if (!token) {
+    navigate("/login");
+    return;
+  }
+
+  const fetchPdf = async () => {
+    try {
+      setLoading(true);
+
+      // If it's a Cloudinary URL (production), open directly
+      if (pdfUrl.includes('cloudinary.com')) {
+        // For Cloudinary URLs, we can open directly in new tab
+        // or use fetch with proper headers
+        setPdfData(pdfUrl); // Store URL directly for iframe
+        setLoading(false);
+        return;
+      }
+
+      // For local server URLs, use fetch with auth
+      const response = await fetch(pdfUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        redirect: 'follow',
+        mode: 'cors',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load PDF: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfData(url);
+      setLoading(false);
+    } catch (err) {
+      console.error("PDF loading error:", err);
+      
+      // Fallback: try opening directly in new tab
+      window.open(pdfUrl, '_blank');
+      onClose(); // Close the modal since we opened in new tab
     }
+  };
 
-    // Fetch PDF with authentication
-    const fetchPdf = async () => {
-      try {
-        setLoading(true);
+  fetchPdf();
 
-        // IMPORTANT FIX: Use no-cors mode and follow redirects
-        const response = await fetch(pdfUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          redirect: 'follow', // Explicitly follow redirects
-          mode: 'cors', // Ensure CORS mode
-          credentials: 'omit' // Don't send cookies for cross-origin
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to load PDF: ${response.status} ${response.statusText}`);
-        }
-
-        // Get the PDF as blob
-        const blob = await response.blob();
-        
-        // Verify it's a PDF
-        if (!blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
-          console.warn('Unexpected content type:', blob.type);
-        }
-
-        // Create object URL
-        const url = URL.createObjectURL(blob);
-        setPdfData(url);
-        setLoading(false);
-      } catch (err) {
-        console.error("PDF loading error details:", {
-          message: err.message,
-          url: pdfUrl,
-          stack: err.stack
-        });
-        
-        // Provide more specific error messages
-        if (err.message.includes('Failed to fetch')) {
-          setError("Network error - please check your connection and try again");
-        } else if (err.message.includes('401')) {
-          setError("Authentication failed - please log in again");
-        } else if (err.message.includes('404')) {
-          setError("PDF file not found");
-        } else {
-          setError(err.message || "Failed to load PDF file");
-        }
-        setLoading(false);
-      }
-    };
-
-    fetchPdf();
-
-    // Cleanup function
-    return () => {
-      if (pdfData) {
-        URL.revokeObjectURL(pdfData);
-      }
-    };
-  }, [pdfUrl, navigate]);
+  return () => {
+    if (pdfData && !pdfData.includes('cloudinary.com')) {
+      URL.revokeObjectURL(pdfData);
+    }
+  };
+}, [pdfUrl, navigate]);
 
   const handleDownload = async () => {
     try {
