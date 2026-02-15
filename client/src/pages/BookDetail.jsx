@@ -48,7 +48,7 @@ export default function BookDetail() {
     try {
       setBorrowing(true);
       await borrowAPI.borrowBook(id);
-      alert("✅ Book borrowed successfully! You have 14 days to return it.");
+      alert(" Book borrowed successfully! You have 14 days to return it.");
       fetchBook();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to borrow book");
@@ -345,7 +345,7 @@ export default function BookDetail() {
                     days
                   </p>
                   <p className="text-sm text-blue-800 mt-1">
-                    <span className="font-semibold">⚠️ Late Return:</span>{" "}
+                    <span className="font-semibold"> Late Return:</span>{" "}
                     Overdue books may incur penalties
                   </p>
                 </div>

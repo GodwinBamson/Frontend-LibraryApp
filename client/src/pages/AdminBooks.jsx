@@ -126,7 +126,7 @@ export default function AdminBooks() {
       }
 
       // Log FormData contents for debugging
-      console.log("📦 Submitting form data:");
+      console.log(" Submitting form data:");
       for (let pair of formDataToSend.entries()) {
         console.log(
           pair[0] + ": " + (pair[0] === "pdfFile" ? pair[1].name : pair[1]),
@@ -143,14 +143,14 @@ export default function AdminBooks() {
         response = await bookAPI.createBook(formDataToSend);
       }
 
-      console.log("✅ Book saved successfully:", response.data);
-      alert(`✅ Book ${editingBook ? "updated" : "added"} successfully!`);
+      console.log(" Book saved successfully:", response.data);
+      alert(` Book ${editingBook ? "updated" : "added"} successfully!`);
 
       // Reset form and refresh books
       resetForm();
       await fetchBooks();
     } catch (error) {
-      console.error("❌ Error saving book:", error);
+      console.error(" Error saving book:", error);
 
       // Handle different error types
       let errorMessage = "Operation failed";
@@ -160,7 +160,7 @@ export default function AdminBooks() {
         errorMessage = error.message;
       }
 
-      alert(`❌ ${errorMessage}`);
+      alert(` ${errorMessage}`);
     } finally {
       setUploading(false);
     }
@@ -276,7 +276,7 @@ export default function AdminBooks() {
     try {
       setLoading(true);
       await bookAPI.deleteBook(id);
-      alert("✅ Book deleted successfully!");
+      alert(" Book deleted successfully!");
       await fetchBooks();
     } catch (error) {
       console.error("Error deleting book:", error);

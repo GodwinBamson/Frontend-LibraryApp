@@ -58,7 +58,7 @@ export default function Books() {
 
     try {
       await borrowAPI.borrowBook(bookId);
-      alert("✅ Book borrowed successfully! You have 14 days to return it.");
+      alert(" Book borrowed successfully! You have 14 days to return it.");
       fetchBooks();
     } catch (error) {
       alert(error.response?.data?.message || "Failed to borrow book");
