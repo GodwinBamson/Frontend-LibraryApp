@@ -1,0 +1,287 @@
+
+
+/* General Styling */
+.admin-register{
+    display: flex;
+    justify-content: center;
+    gap: 4rem;
+    margin: 2rem 4rem;
+  }
+  
+  .admin-register-form input{
+    width: 35vw;
+    margin-top: 1rem;
+  }
+  
+  .admin-register-form button{
+    width: 35vw;
+  }
+  
+  .admin-register-form select{
+    width: 100%;
+    margin-top: 1rem;
+    margin-bottom: .5rem;
+    width: 35vw;
+    padding: 8px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  
+  .add-register-table{
+    width: 50vw;
+  }
+  
+  .admin-register-btn{
+    display: flex;
+    gap: .5rem;
+    justify-content: center;
+  }
+  
+  .admin-register-btn button{
+    width: 30%;
+    background-color: red;
+  }
+  
+  .admin-register-btn button:first-child{
+    background-color: #007bff;
+  }
+  
+  .admin-table-details{
+    margin-top: .6rem;
+  }
+  
+  .admin-register-btn button{
+    margin-top: 0;
+  }
+  
+  .login-page {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    
+    .login-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      font-size: 1rem;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
+    input {
+      width: 100%;
+      padding: 8px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    .btn-login {
+      width: 100%;
+      padding: 10px;
+      font-size: 1rem;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-login:hover {
+      background-color: #0056b3;
+    }
+    
+    .error-message {
+      color: red;
+      font-size: 0.9rem;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+  
+    .add-staff {
+      letter-spacing: 1.8px;
+      font-size: 2rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: red;
+  }
+  
+  .add-staff span {
+      color: #007bff;
+  }
+  
+  .add-student-page{
+    padding-top: 2rem;
+    margin: 0 4rem;
+    display: flex;
+    gap: 3rem;
+    /* justify-content: center; */
+  }
+  
+  .add-h3 span {
+    color: red;
+  }
+  
+  .add-h3 {
+    letter-spacing: 1.8px;
+    font-weight: bold;
+    font-size: 1.5rem;
+    text-align: center;
+    text-transform: uppercase;
+    color: #007bff;
+  }
+  
+  .add-div table{
+    margin-top: 3rem;
+  }
+  
+  .add-btn{
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .add-btn button{
+    margin-top: 0;
+  }
+  
+  .add-btn-red{
+    background-color: red;
+  }
+  
+  .add-fotm{
+    width: 25vw;
+  }
+  
+  .students-table{
+    margin-top: 2rem;
+  }
+  
+  .student-pass{
+    /* width: 30%; */
+    display: none;
+  }
+  
+  .s-pass{
+    /* width: 25%; */
+    display: none;
+  }
+  
+  .add-buttons{
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+  
+  .add-buttons button{
+    margin-top: 0;
+    width: 25% !important;
+    padding: 5px 10px;
+  }
+  
+  .add-buttons button:last-child{
+    background-color: red;
+  }
+  
+  
+    
+    /* Responsiveness */
+    @media (max-width: 767px) {
+      .add-buttons button{
+        margin-top: 0;
+        width: 50% !important;
+        padding: 5px 10px;
+    }
+      .admin-register{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1rem;
+        margin: 1rem 1rem;
+      }
+  
+      .admin-register-form input{
+        width: 99%;
+      }
+  
+      .admin-register-form select{
+        width: 99%;
+      }
+  
+      .admin-register-form button{
+        width: 99%;
+      }
+  
+      .add-register-table {
+        /* display: block; */
+        width: 90vw;
+
+      }
+
+      .add-staff-table-div{
+        overflow-x: auto; /* Horizontal scrolling */
+        white-space: nowrap;
+      }
+    
+      .add-register-table thead {
+        display: block;
+      }
+  
+      .add-staff-role-head{
+        display: flex;
+      }
+  
+      .add-staff-role-head th{
+        width: 100% !important;
+      }
+  
+      .add-staff-role td{
+        width: 100%;
+      }
+  
+      .admin-register-head th{
+        display: flex;
+      }
+
+      .add-staff-head{
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .add-staff-head th{
+        width: 100%;
+    }
+    }
+  
+  
+    @media (min-width: 767px) and (max-width: 1023px){
+      .admin-register{
+        gap: 2rem;
+      }
+  
+      .add-buttons button{
+        margin-top: 0;
+        width: 50% !important;
+        padding: 5px 10px;
+    }
+    }
+    

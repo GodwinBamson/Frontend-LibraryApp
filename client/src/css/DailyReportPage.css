@@ -1,0 +1,42 @@
+.daily-report-button{
+    width: 20% !important;
+}
+
+.daily-report-div{
+    justify-content: space-between;
+}
+@media (max-width: 767px){
+.daily-report-head{
+    display: flex;
+}
+
+.daily-report-head th{
+    width: 100%;
+}
+
+.daily-report-body{
+    display: flex;
+}
+
+.daily-report-body td{
+    width: 100%;
+}
+
+.daily-report-button{
+    width: 30% !important;
+}
+
+.daily-report-div{
+    justify-content: space-between;
+}
+}
+
+@media (min-width: 767px) and (max-width: 1023px){
+    .daily-report-button{
+        width: 30% !important;
+    }
+    
+    .daily-report-div{
+        justify-content: space-between;
+    }
+}

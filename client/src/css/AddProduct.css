@@ -185,19 +185,18 @@ h1 {
   gap: 3rem;
 }
 
-.add-product-next{
-  width: 5%;
-  /* font-size: 2rem; */
-  padding: 3px 8px;
-  border-radius: 50px;
-}
-
 .add-product-none{
   display: none;
 }
 
 .add-product-update{
   padding: 10px 20px;
+}
+
+.add-product-next{
+  padding: 8px 20px !important;
+  width: 20% !important;
+  border-radius: 50px;
 }
 
 /* Responsive Styles */
@@ -283,11 +282,6 @@ h1 {
 }
 
 @media (min-width: 1024px){
-  .add-product-next{
-    width: 10%;
-    padding: 8px 8px;
-    border-radius: 50px;
-  }
 
   .add-grid-container{
     gap: 2rem;

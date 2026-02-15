@@ -1,14 +1,14 @@
 /* General Styling */
-.log-in-form {
+.login-container-1 {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
     padding: 20px;
+    height: 100vh;
     box-sizing: border-box;
   }
   
-  .login-container {
+  .login-form {
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
@@ -16,6 +16,23 @@
     width: 100%;
     max-width: 400px;
   }
+  /* Add to your CSS file or in your App.css */
+.spinner {
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-left-color: #000;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 
   .log-in-form .login-container input{
     margin-bottom: 1rem;
@@ -34,6 +51,10 @@
     font-size: 1rem;
     margin-bottom: 5px;
     display: block;
+  }
+
+  .login-input{
+    margin-bottom: 1rem;
   }
   
   input {

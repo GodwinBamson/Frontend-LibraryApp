@@ -224,6 +224,25 @@ button {
   .report-header span {
     color: #007bff;
   }
+
+  .report-files{
+    display: flex;
+    justify-content: space-around;
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .report-files button{
+    border-radius: 0.25rem;
+  }
+
+  .report-files button:first-child{
+    background-color: rgb(22 163 74 / var(--tw-bg-opacity, 1));
+  }
+
+  .report-files button:last-child{
+    background-color: rgb(220 38 38 / var(--tw-bg-opacity, 1));
+  }
   
   /* Media Queries */
   

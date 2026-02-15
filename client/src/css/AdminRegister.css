@@ -183,9 +183,32 @@
   /* width: 25%; */
   display: none;
 }
+
+.add-buttons{
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.add-buttons button{
+  margin-top: 0;
+  width: 25% !important;
+  padding: 5px 10px;
+}
+
+.add-buttons button:last-child{
+  background-color: red;
+}
+
+
   
   /* Responsiveness */
   @media (max-width: 767px) {
+    .add-buttons button{
+      margin-top: 0;
+      width: 50% !important;
+      padding: 5px 10px;
+  }
     .admin-register{
       display: flex;
       flex-direction: column;
@@ -215,58 +238,22 @@
   
     .admin-register-table thead {
       display: block;
-      width: 100vw;
     }
-  
-    .admin-register-table thead tr{
-      font-size: 14px;
+
+    .add-staff-role-head{
       display: flex;
-      gap: 2rem;
-      padding: 8px;
     }
 
-    .admin-register-table thead{
+    .add-staff-role-head th{
+      width: 100% !important;
+    }
+
+    .add-staff-role td{
       width: 100%;
     }
 
-    .admin-register-table thead tr{
-      width: 100%;
-    }
-
-    .admin-register-table thead .admin-register-username{
-      width: 30%;
-    }
-
-    .admin-register-table thead .admin-register-thead-mail{
-      margin-left: 1rem;
-    }
-
-    .admin-register-table thead .admin-register-thead-action{
-      margin-left: 1rem;
-    }
-
-    .admin-register-table thead .admin-register-thead-role{
-      margin-left: 4rem;
-    }
-
-    .admin-register-btn button {
-      width: 40%;
-  }
-
-    .admin-register-table tbody .admin-register-name{
-      width: 25vw;
-    }
-
-    .admin-register-table tbody .admin-register-email{
-      width: 45vw;
-    }
-
-    .admin-register-table tbody .admin-register-role{
-      width: 15vw;
-    }
-
-    .admin-register-btn{
-      width: 30%;
+    .admin-register-head th{
+      display: flex;
     }
   }
 
@@ -275,5 +262,11 @@
     .admin-register{
       gap: 2rem;
     }
+
+    .add-buttons button{
+      margin-top: 0;
+      width: 50% !important;
+      padding: 5px 10px;
+  }
   }
   
