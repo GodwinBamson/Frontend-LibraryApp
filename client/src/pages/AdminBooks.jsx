@@ -1780,6 +1780,7 @@
 
 import { useState, useEffect } from "react";
 import { bookAPI } from "../services/api";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 import { PlusIcon, PencilIcon, TrashIcon, DownloadIcon } from "../components/Icons";
 
 export default function AdminBooks() {
@@ -1923,46 +1924,64 @@ export default function AdminBooks() {
     }
   };
 
-  const handlePdfView = (book) => {
-    if (book.pdfFile) {
-      window.open(book.pdfFile, "_blank", "noopener,noreferrer");
-    } else {
-      alert("No PDF available for this book");
-    }
-  };
 
-  const handleDownloadPdf = async (book) => {
-    if (!book.pdfFile) {
-      alert("No PDF available to download");
-      return;
+// Update handlePdfView function
+const handlePdfView = (book) => {
+    if (!book || !book.pdfFile) {
+        alert("No PDF available for this book");
+        return;
+    }
+    
+    // Get the API URL
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    
+    // Use the backend endpoint directly
+    const pdfUrl = `${API_URL}/books/pdf/${book._id}`;
+    
+    // Open in new tab - browser will handle the request
+    window.open(pdfUrl, '_blank');
+};
+
+// Add this function for downloading
+const handleDownloadPdf = async (book) => {
+    if (!book || !book.pdfFile) {
+        alert("No PDF available to download");
+        return;
     }
 
     try {
-      // If it's a Cloudinary URL, we can directly download
-      if (book.pdfFile.startsWith('http')) {
-        const link = document.createElement("a");
-        link.href = book.pdfFile;
-        link.download = book.pdfFilename || `${book.title.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      } else {
-        // For local development, use the API endpoint
-        const response = await bookAPI.getPdf(book._id);
-        const url = window.URL.createObjectURL(new Blob([response.data]));
+        let pdfUrl = book.pdfFile;
+        let filename = book.pdfFilename || `${book.title.replace(/\s+/g, '_')}.pdf`;
+        
+        // For Cloudinary URLs
+        if (book.pdfFile.includes('cloudinary')) {
+            // Remove version parameter
+            pdfUrl = pdfUrl.replace(/\/v\d+\//, '/');
+            
+            // Add timestamp to prevent caching
+            const separator = pdfUrl.includes('?') ? '&' : '?';
+            pdfUrl = `${pdfUrl}${separator}_t=${Date.now()}`;
+        } 
+        // For local development
+        else {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            pdfUrl = `${API_URL}/books/pdf/${book._id}?_t=${Date.now()}`;
+        }
+        
+        // Create download link
         const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', book.pdfFilename || `${book.title}.pdf`);
+        link.href = pdfUrl;
+        link.download = filename;
+        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-      }
+        document.body.removeChild(link);
+        
     } catch (error) {
-      console.error("Error downloading PDF:", error);
-      alert("Failed to download PDF. Please try again.");
+        console.error("Error downloading PDF:", error);
+        alert("Failed to download PDF. Please try again.");
     }
-  };
+};
 
   const resetForm = () => {
     setShowForm(false);
