@@ -238,38 +238,15 @@
 
 
 
-/* eslint-disable no-unused-vars */
-/* eslint-disable react/prop-types */
-
 import { useEffect } from "react";
 
 export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
   useEffect(() => {
-    // Open PDF in new tab
+    // Just open in new tab and close the modal
     window.open(pdfUrl, "_blank", "noopener,noreferrer");
-    // Close the modal immediately
     onClose();
   }, [pdfUrl, onClose]);
 
-  // Don't render anything - just a trigger component
-  return null;
+  return null; // Don't render anything
 }
-
-
-
-/* eslint-disable no-unused-vars */
-/* eslint-disable react/prop-types */
-
-// import { useEffect } from "react";
-
-// export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
-//   useEffect(() => {
-//     // Add #toolbar=0 to hide download button in browser PDF viewer
-//     const pdfViewerUrl = `${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`;
-//     window.open(pdfViewerUrl, "_blank", "noopener,noreferrer");
-//     onClose();
-//   }, [pdfUrl, onClose]);
-
-//   return null;
-// }
 
