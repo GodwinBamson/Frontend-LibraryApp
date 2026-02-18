@@ -136,10 +136,11 @@ const API_URL = import.meta.env.PROD
   : "http://localhost:5000/api";
 
 console.log(" API Base URL:", API_URL);
+console.log(" Environment:", import.meta.env.PROD ? "production" : "development");
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 60000, // Increased timeout for PDF uploads
+  timeout: 60000,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",

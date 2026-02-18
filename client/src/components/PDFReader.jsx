@@ -706,23 +706,31 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
           return;
         }
 
-        // For server URLs
-        const token = localStorage.getItem("token");
-        
-        const response = await fetch(pdfUrl, {
-          headers: token ? {
-            Authorization: `Bearer ${token}`,
-          } : {},
-          mode: 'cors',
-        });
+        // For server URLs - try to fetch directly
+        try {
+          const response = await fetch(pdfUrl, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+              'Accept': 'application/pdf',
+            },
+          });
 
-        if (!response.ok) {
-          throw new Error(`Failed to load PDF: ${response.status}`);
+          if (!response.ok) {
+            throw new Error(`Failed to load PDF: ${response.status}`);
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setPdfData(url);
+        } catch (fetchError) {
+          console.error("Fetch error, trying direct access:", fetchError);
+          // If fetch fails, try opening directly in new tab
+          window.open(pdfUrl, "_blank");
+          onClose();
+          return;
         }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        setPdfData(url);
+        
         setLoading(false);
       } catch (err) {
         console.error("PDF loading error:", err);
@@ -738,11 +746,15 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
         URL.revokeObjectURL(pdfData);
       }
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, onClose]);
 
   const openInNewTab = () => {
     if (pdfData) {
       window.open(pdfData, "_blank");
+      onClose();
+    } else if (pdfUrl) {
+      window.open(pdfUrl, "_blank");
+      onClose();
     }
   };
 

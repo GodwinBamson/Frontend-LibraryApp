@@ -1782,7 +1782,8 @@ export default function AdminBooks() {
   //   window.open(pdfUrl, "_blank");
   // };
 
-  // Update the handlePdfView function in AdminBooks.jsx
+  
+// Update the handlePdfView function in AdminBooks.jsx
 const handlePdfView = (book) => {
   if (!book || !book.pdfFile) {
     alert("No PDF available for this book");
@@ -1797,13 +1798,17 @@ const handlePdfView = (book) => {
     return;
   }
 
+  // For production server
+  if (import.meta.env.PROD) {
+    const pdfUrl = `https://library-server-5rpq.onrender.com/api/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+    window.open(pdfUrl, "_blank");
+    return;
+  }
+
   // For local development
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-  const pdfUrl = `${API_URL}/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
-  
+  const pdfUrl = `http://localhost:5000/api/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
   window.open(pdfUrl, "_blank");
 };
-
   const resetForm = () => {
     setShowForm(false);
     setEditingBook(null);
