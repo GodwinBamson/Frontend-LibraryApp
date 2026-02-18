@@ -1761,26 +1761,48 @@ export default function AdminBooks() {
   };
 
   // Update handlePdfView function
-  const handlePdfView = (book) => {
-    if (!book || !book.pdfFile) {
-      alert("No PDF available for this book");
-      return;
-    }
+  // const handlePdfView = (book) => {
+  //   if (!book || !book.pdfFile) {
+  //     alert("No PDF available for this book");
+  //     return;
+  //   }
 
-    // For Cloudinary URLs, add parameters to disable toolbar
-    if (book.pdfFile.includes("cloudinary.com")) {
-      const pdfUrl = `${book.pdfFile}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
-      window.open(pdfUrl, "_blank");
-      return;
-    }
+  //   // For Cloudinary URLs, add parameters to disable toolbar
+  //   if (book.pdfFile.includes("cloudinary.com")) {
+  //     const pdfUrl = `${book.pdfFile}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+  //     window.open(pdfUrl, "_blank");
+  //     return;
+  //   }
 
-    // For local development
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-    const pdfUrl = `${API_URL}/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+  //   // For local development
+  //   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  //   const pdfUrl = `${API_URL}/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
     
-    // Open in new tab
+  //   // Open in new tab
+  //   window.open(pdfUrl, "_blank");
+  // };
+
+  // Update the handlePdfView function in AdminBooks.jsx
+const handlePdfView = (book) => {
+  if (!book || !book.pdfFile) {
+    alert("No PDF available for this book");
+    return;
+  }
+
+  // For Cloudinary URLs (production)
+  if (book.pdfFile.includes("cloudinary.com")) {
+    // Add parameters to disable toolbar
+    const pdfUrl = `${book.pdfFile}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
     window.open(pdfUrl, "_blank");
-  };
+    return;
+  }
+
+  // For local development
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  const pdfUrl = `${API_URL}/books/pdf/${book._id}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+  
+  window.open(pdfUrl, "_blank");
+};
 
   const resetForm = () => {
     setShowForm(false);

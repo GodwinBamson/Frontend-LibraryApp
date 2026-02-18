@@ -683,29 +683,30 @@
 /* eslint-disable react/prop-types */
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pdfData, setPdfData] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const loadPdf = async () => {
       try {
         setLoading(true);
         
-        // For Cloudinary URLs (production) - just use the URL directly
+        console.log("Loading PDF from:", pdfUrl);
+        
+        // For Cloudinary URLs - use directly
         if (pdfUrl && pdfUrl.includes("cloudinary.com")) {
           // Add parameters to disable toolbar
           const viewerUrl = `${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+          console.log("Using Cloudinary URL with viewer params:", viewerUrl);
           setPdfData(viewerUrl);
           setLoading(false);
           return;
         }
 
-        // For local development or server endpoints
+        // For server URLs
         const token = localStorage.getItem("token");
         
         const response = await fetch(pdfUrl, {
@@ -713,7 +714,6 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
             Authorization: `Bearer ${token}`,
           } : {},
           mode: 'cors',
-          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -740,11 +740,9 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
     };
   }, [pdfUrl]);
 
-  // Function to open in new tab with disabled features
   const openInNewTab = () => {
     if (pdfData) {
       window.open(pdfData, "_blank");
-      onClose();
     }
   };
 
@@ -806,7 +804,6 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col">
-      {/* PDF Toolbar - Only Close Button and Open in New Tab */}
       <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
@@ -854,7 +851,6 @@ export default function PDFReader({ pdfUrl, bookTitle, onClose }) {
         </div>
       </div>
 
-      {/* PDF Viewer */}
       <div className="flex-1 bg-gray-800">
         {pdfData ? (
           <iframe
