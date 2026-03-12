@@ -2270,8 +2270,6 @@
 
 
 
-
-
 /* eslint-disable no-dupe-class-members */
 /* eslint-disable no-undef */
 /* eslint-disable no-async-promise-executor */
@@ -2302,6 +2300,8 @@ class WebRTCService {
     this.connectionInProgress = new Set();
     this.serverUrl = null;
     this.productionUrl = 'https://library-server-5rpq.onrender.com';
+    this.audioContext = null;
+    this.audioAnalyser = null;
 
     // Callbacks
     this.onUserJoined = null;
@@ -2331,20 +2331,20 @@ class WebRTCService {
         }
       ],
       iceCandidatePoolSize: 10,
+      // Add bundle policy for better compatibility
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require"
     };
   }
 
   // Helper method to get the correct server URL
   getServerUrl() {
-    // If we already determined the URL, return it
     if (this.serverUrl) return this.serverUrl;
 
-    // Force production URL for Render deployment
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       console.log('Current hostname:', hostname);
       
-      // If we're on render.com or any production domain, use production server
       if (hostname.includes('render.com') || !hostname.includes('localhost')) {
         this.serverUrl = this.productionUrl;
         console.log('Using production server URL:', this.serverUrl);
@@ -2352,7 +2352,6 @@ class WebRTCService {
       }
     }
 
-    // Check for environment variable
     if (typeof process !== 'undefined' && process.env) {
       if (process.env.REACT_APP_SERVER_URL) {
         this.serverUrl = process.env.REACT_APP_SERVER_URL;
@@ -2361,7 +2360,6 @@ class WebRTCService {
       }
     }
 
-    // Default to localhost for development
     this.serverUrl = 'http://localhost:5000';
     console.log('Using local server URL:', this.serverUrl);
     return this.serverUrl;
@@ -2371,7 +2369,6 @@ class WebRTCService {
   async checkServerHealth() {
     try {
       const baseUrl = this.getServerUrl();
-      // Try multiple health endpoints
       const endpoints = [
         `${baseUrl}/health`,
         `${baseUrl}/api/health`,
@@ -2389,7 +2386,6 @@ class WebRTCService {
             },
             mode: 'cors',
             cache: 'no-cache',
-            // Short timeout for health check
             signal: AbortSignal.timeout(5000)
           });
           
@@ -2402,7 +2398,6 @@ class WebRTCService {
         }
       }
       
-      // Try a simple GET request to the base URL
       try {
         const response = await fetch(baseUrl, {
           method: 'GET',
@@ -2435,14 +2430,12 @@ class WebRTCService {
 
     console.log("Initializing WebRTC with:", { userId, username, role });
 
-    // Get the correct server URL
     const serverUrl = this.getServerUrl();
     console.log("Connecting to Socket.IO server:", serverUrl);
 
-    // Create socket connection with production-friendly options
     this.socket = io(serverUrl, {
       query: { userId, username, role },
-      transports: ["polling", "websocket"], // Try polling first, then websocket
+      transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: 15,
       reconnectionDelay: 1000,
@@ -2460,7 +2453,6 @@ class WebRTCService {
     this.currentUser = { userId, username, role };
     this._setupListeners();
 
-    // Perform health check in background
     setTimeout(() => {
       this.checkServerHealth().then(isHealthy => {
         console.log('Initial health check result:', isHealthy);
@@ -2486,11 +2478,9 @@ class WebRTCService {
         this.socketIdToUserId.set(this.socket.id, this.currentUser.userId);
       }
 
-      // Request initial data
       this.socket.emit("request-staff-list");
       this.socket.emit("request-message-history", this.currentUser.userId);
 
-      // Try to upgrade to websocket if currently using polling
       if (this.socket.io.engine.transport.name === 'polling') {
         console.log('Currently using polling, attempting to upgrade to websocket...');
         setTimeout(() => {
@@ -2525,14 +2515,12 @@ class WebRTCService {
       console.error("🔴 Connection error:", error);
       this._handleStateChange("error", error.message);
       
-      // Log more details about the error
       console.log('Connection error details:', {
         message: error.message,
         type: error.type,
         description: error.description
       });
       
-      // Attempt to reconnect with polling only
       if (this.socket && this.socket.io) {
         console.log("Switching to polling only transport...");
         this.socket.io.opts.transports = ["polling"];
@@ -2548,7 +2536,6 @@ class WebRTCService {
       console.log("✅ Reconnected to server");
       this._handleStateChange("reconnected");
       
-      // Re-emit necessary data
       if (this.currentUser) {
         this.socket.emit("request-staff-list");
         this.socket.emit("request-message-history", this.currentUser.userId);
@@ -2629,9 +2616,12 @@ class WebRTCService {
       this.socketIdToUserId.set(data.socketId, data.userId);
 
       if (data.userId !== this.currentUser?.userId) {
+        // Use consistent negotiation strategy - always let the caller initiate
+        // The user with the smaller userId creates the offer
         if (this.currentUser?.userId < data.userId) {
           console.log("Creating offer because userId is smaller");
-          setTimeout(() => this._createOffer(data.userId), 1000);
+          // Wait a bit for the connection to be ready
+          setTimeout(() => this._createOffer(data.userId), 1500);
         } else {
           console.log("Waiting for offer from other user");
         }
@@ -2698,6 +2688,7 @@ class WebRTCService {
         participants.forEach((p) => {
           const targetUserId = p.userId;
           if (targetUserId && targetUserId !== this.currentUser?.userId) {
+            // Let the user with smaller userId create the offer
             if (this.currentUser?.userId < targetUserId) {
               setTimeout(() => this._createOffer(targetUserId), 1500);
             }
@@ -2925,8 +2916,27 @@ class WebRTCService {
 
       try {
         console.log(`📹 Setting up local stream for ${callType} call...`);
+        // Always request video for video calls, audio only for audio calls
         await this._setupLocalStream(callType === "video", true);
         console.log("✅ Local stream setup complete");
+        
+        // Verify tracks are present
+        if (callType === "video") {
+          const videoTracks = this.localStream?.getVideoTracks();
+          if (!videoTracks || videoTracks.length === 0) {
+            throw new Error("No video track available for video call");
+          }
+          console.log(`Video tracks available: ${videoTracks.length}`);
+          videoTracks.forEach(track => {
+            console.log(`Video track: enabled=${track.enabled}, readyState=${track.readyState}`);
+          });
+        }
+        
+        const audioTracks = this.localStream?.getAudioTracks();
+        if (!audioTracks || audioTracks.length === 0) {
+          throw new Error("No audio track available");
+        }
+        console.log(`Audio tracks available: ${audioTracks.length}`);
 
         const roomId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -2943,12 +2953,24 @@ class WebRTCService {
           callType,
         });
 
-        this.socket.once("room-joined", (data) => {
-          clearTimeout(timeout);
-          console.log("Call started successfully:", data);
-          this.currentRoom = roomId;
-          resolve(data);
-        });
+        // Set up one-time listener for room joined
+        const onRoomJoined = (data) => {
+          if (data.roomId === roomId) {
+            this.socket.off("room-joined", onRoomJoined);
+            clearTimeout(timeout);
+            console.log("Call started successfully:", data);
+            this.currentRoom = roomId;
+            
+            // Create offer to the target user
+            setTimeout(() => {
+              this._createOffer(targetUserId);
+            }, 1000);
+            
+            resolve(data);
+          }
+        };
+
+        this.socket.on("room-joined", onRoomJoined);
       } catch (error) {
         clearTimeout(timeout);
         console.error("❌ Error starting call:", error);
@@ -2986,6 +3008,16 @@ class WebRTCService {
         console.log(`📹 Setting up local stream for ${callType} call...`);
         await this._setupLocalStream(callType === "video", true);
         console.log("✅ Local stream setup complete");
+        
+        // Verify tracks
+        if (callType === "video") {
+          const videoTracks = this.localStream?.getVideoTracks();
+          if (!videoTracks || videoTracks.length === 0) {
+            console.warn("No video track available, falling back to audio only");
+            callType = "audio";
+            this.currentCallType = "audio";
+          }
+        }
 
         const callerUserId = Array.from(this.pendingCalls.keys())[0];
         if (callerUserId) {
@@ -3001,12 +3033,17 @@ class WebRTCService {
           callType,
         });
 
-        this.socket.once("room-joined", (data) => {
-          clearTimeout(timeout);
-          console.log("Call joined successfully:", data);
-          this.pendingCallData = null;
-          resolve(data);
-        });
+        const onRoomJoined = (data) => {
+          if (data.roomId === roomId) {
+            this.socket.off("room-joined", onRoomJoined);
+            clearTimeout(timeout);
+            console.log("Call joined successfully:", data);
+            this.pendingCallData = null;
+            resolve(data);
+          }
+        };
+
+        this.socket.on("room-joined", onRoomJoined);
       } catch (error) {
         clearTimeout(timeout);
         console.error("❌ Error accepting call:", error);
@@ -3016,6 +3053,7 @@ class WebRTCService {
   }
 
   async _setupLocalStream(video = true, audio = true) {
+    // Clean up existing stream if media types don't match
     if (this.localStream) {
       const hasVideo = this.localStream.getVideoTracks().length > 0;
       const hasAudio = this.localStream.getAudioTracks().length > 0;
@@ -3027,10 +3065,17 @@ class WebRTCService {
         (!audio && hasAudio)
       ) {
         console.log("Recreating stream for different media type");
-        this.localStream.getTracks().forEach((track) => track.stop());
+        this.localStream.getTracks().forEach((track) => {
+          track.stop();
+          this.localStream.removeTrack(track);
+        });
         this.localStream = null;
       } else {
         console.log("Using existing stream");
+        // Ensure tracks are enabled
+        this.localStream.getTracks().forEach(track => {
+          track.enabled = true;
+        });
         return this.localStream;
       }
     }
@@ -3058,6 +3103,8 @@ class WebRTCService {
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
+              sampleRate: { ideal: 48000 },
+              channelCount: { ideal: 2 }
             }
           : false,
       };
@@ -3069,6 +3116,16 @@ class WebRTCService {
       console.log("✅ Media access granted!");
       console.log("Video tracks:", this.localStream.getVideoTracks().length);
       console.log("Audio tracks:", this.localStream.getAudioTracks().length);
+      
+      // Log track details
+      this.localStream.getTracks().forEach(track => {
+        console.log(`Track: kind=${track.kind}, enabled=${track.enabled}, readyState=${track.readyState}, muted=${track.muted}`);
+      });
+
+      // Ensure tracks are enabled
+      this.localStream.getTracks().forEach(track => {
+        track.enabled = true;
+      });
 
       this._setupAudioMonitoring();
 
@@ -3086,6 +3143,8 @@ class WebRTCService {
         errorMessage = "Camera/Microphone is in use by another application.";
       } else if (error.name === "OverconstrainedError") {
         errorMessage = "Camera doesn't support required settings.";
+      } else if (error.name === "TypeError") {
+        errorMessage = "Invalid media constraints.";
       }
 
       throw new Error(errorMessage);
@@ -3096,22 +3155,25 @@ class WebRTCService {
     if (!this.localStream || !window.AudioContext) return;
 
     try {
-      const audioContext = new (
-        window.AudioContext || window.webkitAudioContext
-      )();
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.3;
+      // Clean up existing audio context
+      if (this.audioContext) {
+        this.audioContext.close();
+      }
 
-      const source = audioContext.createMediaStreamSource(this.localStream);
-      source.connect(analyser);
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      this.audioAnalyser = this.audioContext.createAnalyser();
+      this.audioAnalyser.fftSize = 256;
+      this.audioAnalyser.smoothingTimeConstant = 0.3;
 
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const source = this.audioContext.createMediaStreamSource(this.localStream);
+      source.connect(this.audioAnalyser);
+
+      const dataArray = new Uint8Array(this.audioAnalyser.frequencyBinCount);
 
       const checkAudioLevel = () => {
         if (!this.localStream || !this.socket?.connected) return;
 
-        analyser.getByteFrequencyData(dataArray);
+        this.audioAnalyser.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         const normalizedLevel = average / 255;
 
@@ -3136,19 +3198,25 @@ class WebRTCService {
     const pc = new RTCPeerConnection({
       iceServers: this.config.iceServers,
       iceCandidatePoolSize: this.config.iceCandidatePoolSize,
+      bundlePolicy: this.config.bundlePolicy,
+      rtcpMuxPolicy: this.config.rtcpMuxPolicy
     });
 
+    // Add local stream tracks to peer connection
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        console.log(
-          `Adding ${track.kind} track to peer connection for ${userId}`,
-        );
+      const tracks = this.localStream.getTracks();
+      console.log(`Adding ${tracks.length} tracks to peer connection for ${userId}`);
+      
+      tracks.forEach((track) => {
+        console.log(`Adding ${track.kind} track to peer connection for ${userId}`, {
+          enabled: track.enabled,
+          readyState: track.readyState,
+          muted: track.muted
+        });
         pc.addTrack(track, this.localStream);
       });
     } else {
-      console.warn(
-        `No local stream available when creating peer connection for ${userId}`,
-      );
+      console.warn(`No local stream available when creating peer connection for ${userId}`);
     }
 
     pc.onicecandidate = (event) => {
@@ -3169,6 +3237,7 @@ class WebRTCService {
         pc.iceConnectionState === "completed"
       ) {
         console.log(`✅ Connection established with ${userId}`);
+        this.connectionInProgress.delete(userId);
       } else if (pc.iceConnectionState === "failed") {
         console.log(`❌ Connection failed with ${userId}`);
         pc.restartIce();
@@ -3189,9 +3258,7 @@ class WebRTCService {
 
     pc.ontrack = (event) => {
       console.log(`📡 Received ${event.track.kind} track from:`, userId);
-      console.log(
-        `   Track enabled: ${event.track.enabled}, readyState: ${event.track.readyState}`,
-      );
+      console.log(`   Track enabled: ${event.track.enabled}, readyState: ${event.track.readyState}`);
 
       const [stream] = event.streams;
 
@@ -3203,17 +3270,18 @@ class WebRTCService {
           audioTracks: stream.getAudioTracks().length,
         });
 
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) {
-          console.log(`   Video track settings:`, videoTrack.getSettings());
-          console.log(
-            `   Video track constraints:`,
-            videoTrack.getConstraints(),
-          );
-        }
+        // Log all tracks in the stream
+        stream.getTracks().forEach(track => {
+          console.log(`Remote track: kind=${track.kind}, enabled=${track.enabled}, readyState=${track.readyState}`);
+        });
 
+        // Ensure the stream is stored
         this.remoteStreams.set(userId, stream);
-        this.onRemoteStream?.(userId, stream);
+        
+        // Trigger callback
+        if (this.onRemoteStream) {
+          this.onRemoteStream(userId, stream);
+        }
       }
     };
 
@@ -3236,15 +3304,18 @@ class WebRTCService {
     this.connectionInProgress.add(userId);
 
     try {
+      // Ensure local stream exists
       if (!this.localStream) {
         console.log(`No local stream, creating one before offer to ${userId}`);
         await this._setupLocalStream(this.currentCallType === "video", true);
       }
 
+      // Verify tracks based on call type
       if (this.currentCallType === "video") {
         const videoTrack = this.localStream?.getVideoTracks()[0];
         if (!videoTrack) {
-          console.warn(`No video track available for video call to ${userId}`);
+          console.warn(`No video track available for video call to ${userId}, falling back to audio`);
+          this.currentCallType = "audio";
         } else {
           console.log(`Video track available for ${userId}:`, {
             enabled: videoTrack.enabled,
@@ -3254,11 +3325,20 @@ class WebRTCService {
         }
       }
 
+      // Ensure audio track exists
+      const audioTrack = this.localStream?.getAudioTracks()[0];
+      if (!audioTrack) {
+        console.error(`No audio track available for call to ${userId}`);
+        this.connectionInProgress.delete(userId);
+        return;
+      }
+
       let pc = this.peerConnections.get(userId);
       if (!pc) {
         pc = this._createPeerConnection(userId);
       }
 
+      // Wait for stable signaling state
       if (pc.signalingState !== "stable") {
         console.log(
           `Signaling state not stable for ${userId}, current state:`,
@@ -3280,6 +3360,7 @@ class WebRTCService {
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: this.currentCallType === "video",
+        voiceActivityDetection: true
       });
 
       await pc.setLocalDescription(offer);
@@ -3304,6 +3385,7 @@ class WebRTCService {
         pc = this._createPeerConnection(fromUserId);
       }
 
+      // Wait for stable signaling state
       if (pc.signalingState !== "stable") {
         console.log(
           `Current signaling state: ${pc.signalingState}, waiting for stability`,
@@ -3323,15 +3405,24 @@ class WebRTCService {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       console.log(`✅ Remote description set for ${fromUserId}`);
 
+      // Process any pending ICE candidates
       const pendingCandidates = this.pendingIceCandidates.get(fromUserId) || [];
-      pendingCandidates.forEach((candidate) => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
-          console.error("Error adding pending ICE candidate:", err),
-        );
-      });
-      this.pendingIceCandidates.delete(fromUserId);
+      if (pendingCandidates.length > 0) {
+        console.log(`Processing ${pendingCandidates.length} pending ICE candidates for ${fromUserId}`);
+        pendingCandidates.forEach((candidate) => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
+            console.error("Error adding pending ICE candidate:", err),
+          );
+        });
+        this.pendingIceCandidates.delete(fromUserId);
+      }
 
-      const answer = await pc.createAnswer();
+      // Create answer
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: this.currentCallType === "video"
+      });
+      
       await pc.setLocalDescription(answer);
 
       console.log(`📞 Sending answer to user:`, fromUserId);
@@ -3339,8 +3430,11 @@ class WebRTCService {
         to: fromUserId,
         answer: pc.localDescription,
       });
+
+      this.connectionInProgress.delete(fromUserId);
     } catch (error) {
       console.error("Error handling offer:", error);
+      this.connectionInProgress.delete(fromUserId);
     }
   }
 
@@ -3377,6 +3471,11 @@ class WebRTCService {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach((track) => {
         track.enabled = enabled;
+        console.log(`Audio track ${enabled ? "enabled" : "disabled"}:`, {
+          kind: track.kind,
+          enabled: track.enabled,
+          readyState: track.readyState
+        });
       });
       console.log(`🔊 Audio ${enabled ? "enabled" : "disabled"}`);
     }
@@ -3386,6 +3485,11 @@ class WebRTCService {
     if (this.localStream) {
       this.localStream.getVideoTracks().forEach((track) => {
         track.enabled = enabled;
+        console.log(`Video track ${enabled ? "enabled" : "disabled"}:`, {
+          kind: track.kind,
+          enabled: track.enabled,
+          readyState: track.readyState
+        });
       });
       console.log(`📹 Video ${enabled ? "enabled" : "disabled"}`);
     }
@@ -3449,8 +3553,17 @@ class WebRTCService {
     this.pendingCallData = null;
 
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream.getTracks().forEach((track) => {
+        track.stop();
+      });
       this.localStream = null;
+    }
+
+    // Clean up audio context
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+      this.audioAnalyser = null;
     }
 
     this.currentRoom = null;

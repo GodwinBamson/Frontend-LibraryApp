@@ -5221,7 +5221,6 @@
 
 
 
-
 /* eslint-disable no-unused-vars */
 
 import { useEffect, useRef, useState, useMemo } from "react";
@@ -5260,6 +5259,9 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  VolumeX,
+  Volume1,
+  Volume,
 } from "lucide-react";
 
 const VideoConsultation = () => {
@@ -5315,6 +5317,8 @@ const VideoConsultation = () => {
   const [reconnecting, setReconnecting] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [transport, setTransport] = useState('unknown');
+  const [remoteAudioLevels, setRemoteAudioLevels] = useState({});
+  const [debugInfo, setDebugInfo] = useState({});
 
   const localVideoRef = useRef();
   const remoteVideosRef = useRef({});
@@ -5327,6 +5331,7 @@ const VideoConsultation = () => {
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef();
   const healthCheckIntervalRef = useRef(null);
+  const audioContextRef = useRef(null);
 
   // Emoji list
   const emojis = [
@@ -5640,6 +5645,22 @@ const VideoConsultation = () => {
       border-radius: 12px;
       margin-left: 8px;
     }
+
+    .debug-panel {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #0f0;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 11px;
+      z-index: 1000;
+      max-width: 300px;
+      max-height: 200px;
+      overflow: auto;
+    }
   `;
 
   // Health check function
@@ -5673,10 +5694,8 @@ const VideoConsultation = () => {
     setError("Attempting to reconnect...");
     setConnectionAttempts(prev => prev + 1);
     
-    // Disconnect existing socket
     WebRTCService.disconnect();
     
-    // Reinitialize
     const userId = user._id || user.id || user.userId;
     const username = user.username || user.name || user.email || "User";
     
@@ -5729,15 +5748,12 @@ const VideoConsultation = () => {
       role: user.role,
     });
 
-    // Initialize WebRTC service
     WebRTCService.initialize(userId, username, user.role);
     setIsInitialized(true);
 
-    // Start health checks
     checkServerHealth();
     healthCheckIntervalRef.current = setInterval(checkServerHealth, 30000);
 
-    // Check for pending call
     if (WebRTCService.hasPendingCall && WebRTCService.hasPendingCall()) {
       const pendingCall = WebRTCService.getPendingCall();
       if (pendingCall) {
@@ -5759,7 +5775,6 @@ const VideoConsultation = () => {
         setError(null);
         reconnectAttemptsRef.current = 0;
         setShowReconnect(false);
-        // Get transport type
         if (WebRTCService.socket && WebRTCService.socket.io) {
           setTransport(WebRTCService.socket.io.engine.transport.name);
         }
@@ -5794,11 +5809,32 @@ const VideoConsultation = () => {
       addSystemMessage(`👋 ${userData.username} left the consultation`);
     };
 
+    // FIXED: Enhanced remote stream handler
     WebRTCService.onRemoteStream = (userId, stream) => {
+      console.log(`📡 Remote stream received for ${userId}:`, {
+        id: stream.id,
+        active: stream.active,
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length
+      });
+      
+      // Log track details
+      stream.getTracks().forEach(track => {
+        console.log(`   Remote track: kind=${track.kind}, enabled=${track.enabled}, readyState=${track.readyState}, muted=${track.muted}`);
+      });
+      
+      // Ensure stream is active
+      if (!stream.active) {
+        console.warn(`Remote stream for ${userId} is not active`);
+      }
+      
       setRemoteStreams((prev) => {
+        // If we already have this stream, don't update
         if (prev[userId] && prev[userId].id === stream.id) {
+          console.log(`Remote stream for ${userId} already exists, skipping`);
           return prev;
         }
+        console.log(`✅ Adding remote stream for ${userId} to state`);
         return { ...prev, [userId]: stream };
       });
     };
@@ -5925,7 +5961,6 @@ const VideoConsultation = () => {
       setError(`Connection error: ${error.message}. Retrying...`);
       setShowReconnect(true);
       
-      // Force transport to polling if websocket fails
       if (WebRTCService.socket && WebRTCService.socket.io) {
         WebRTCService.socket.io.opts.transports = ['polling'];
       }
@@ -6043,14 +6078,17 @@ const VideoConsultation = () => {
         !localVideoRef.current.srcObject ||
         localVideoRef.current.srcObject.id !== stream.id
       ) {
+        console.log("Attaching local stream to video element");
         localVideoRef.current.srcObject = stream;
 
         localVideoRef.current
           .play()
           .then(() => {
+            console.log("Local video playing");
             setLocalVideoReady(true);
           })
-          .catch(() => {
+          .catch((err) => {
+            console.log("Local video play error:", err);
             setLocalVideoReady(true);
           });
       } else {
@@ -6073,37 +6111,78 @@ const VideoConsultation = () => {
     }
   }, [WebRTCService.localStream]);
 
-  // Attach remote streams to video elements
+  // FIXED: Enhanced remote stream attachment with retry logic
   useEffect(() => {
-    const timeout = setTimeout(() => {
+    // Force reattach remote streams when they change
+    const attachRemoteStreams = () => {
+      let anyAttached = false;
+      
       Object.entries(remoteStreams).forEach(([userId, stream]) => {
         const videoEl = remoteVideosRef.current[userId];
         if (videoEl && stream) {
-          if (
-            stream.active &&
-            (!videoEl.srcObject || videoEl.srcObject.id !== stream.id)
-          ) {
-            videoEl.srcObject = stream;
-            attachedStreamsRef.current.add(userId);
-          }
+          console.log(`Checking remote stream for ${userId}:`, {
+            hasVideoEl: !!videoEl,
+            streamActive: stream.active,
+            currentSrcObject: videoEl.srcObject?.id,
+            newStreamId: stream.id,
+            videoTracks: stream.getVideoTracks().length,
+            audioTracks: stream.getAudioTracks().length
+          });
 
-          if (videoEl.paused && videoEl.readyState >= 2) {
-            videoEl
-              .play()
-              .then(() => {
-                const playBtn = document.getElementById(`play-btn-${userId}`);
-                if (playBtn) playBtn.style.opacity = "0";
-              })
-              .catch(() => {
-                const playBtn = document.getElementById(`play-btn-${userId}`);
-                if (playBtn) playBtn.style.opacity = "1";
-              });
+          if (stream.active) {
+            // Always set srcObject if it's different or if video element needs it
+            if (!videoEl.srcObject || videoEl.srcObject.id !== stream.id) {
+              console.log(`Attaching remote stream for ${userId}`);
+              videoEl.srcObject = stream;
+              anyAttached = true;
+              
+              // Force play with retry
+              const attemptPlay = () => {
+                videoEl.play()
+                  .then(() => {
+                    console.log(`Remote video playing for ${userId}`);
+                    const playBtn = document.getElementById(`play-btn-${userId}`);
+                    if (playBtn) playBtn.style.opacity = "0";
+                  })
+                  .catch(err => {
+                    console.log(`Remote video play failed for ${userId}, retrying...`, err);
+                    setTimeout(attemptPlay, 500);
+                  });
+              };
+              
+              attemptPlay();
+            } else if (videoEl.paused) {
+              // If video is paused but should be playing
+              console.log(`Remote video for ${userId} is paused, attempting to play`);
+              videoEl.play()
+                .then(() => {
+                  console.log(`Resumed remote video for ${userId}`);
+                  const playBtn = document.getElementById(`play-btn-${userId}`);
+                  if (playBtn) playBtn.style.opacity = "0";
+                })
+                .catch(err => {
+                  console.log(`Remote video resume failed for ${userId}:`, err);
+                });
+            }
           }
         }
       });
-    }, 100);
+      
+      return anyAttached;
+    };
 
-    return () => clearTimeout(timeout);
+    // Try immediately
+    const attached = attachRemoteStreams();
+    
+    // If nothing was attached, set up interval to retry
+    if (!attached && Object.keys(remoteStreams).length > 0) {
+      console.log("No remote streams attached, setting up retry interval");
+      const interval = setInterval(() => {
+        attachRemoteStreams();
+      }, 500);
+      
+      return () => clearInterval(interval);
+    }
   }, [remoteStreams]);
 
   // Scroll to bottom when messages change
@@ -6624,6 +6703,16 @@ const VideoConsultation = () => {
     <>
       <style>{styles}</style>
 
+      {/* Debug Panel - Remove in production */}
+      <div className="debug-panel">
+        <div>Transport: {transport}</div>
+        <div>Remote Streams: {Object.keys(remoteStreams).length}</div>
+        <div>Call Type: {callType || 'none'}</div>
+        <div>Audio: {isAudioEnabled ? 'ON' : 'OFF'}</div>
+        <div>Video: {isVideoEnabled ? 'ON' : 'OFF'}</div>
+        <div>Participants: {participants.length}</div>
+      </div>
+
       {/* Reconnecting Banner */}
       {status.includes('Reconnecting') && (
         <div className="reconnecting-overlay">
@@ -7137,12 +7226,17 @@ const VideoConsultation = () => {
                         if (el && !localVideoRef.current) {
                           localVideoRef.current = el;
                           if (WebRTCService.localStream && !el.srcObject) {
+                            console.log("Attaching local stream to video element");
                             el.srcObject = WebRTCService.localStream;
                             el.play()
                               .then(() => {
+                                console.log("Local video playing");
                                 setLocalVideoReady(true);
                               })
-                              .catch(() => {});
+                              .catch((err) => {
+                                console.log("Local video play error:", err);
+                                setLocalVideoReady(true);
+                              });
                           }
                         }
                       }}
@@ -7229,27 +7323,38 @@ const VideoConsultation = () => {
                                 stream.active &&
                                 (!el.srcObject || el.srcObject.id !== stream.id)
                               ) {
+                                console.log(`Attaching remote stream for ${userId}`);
                                 el.srcObject = stream;
 
-                                setTimeout(() => {
-                                  if (el.paused) {
-                                    el.play()
-                                      .then(() => {
-                                        const playBtn = document.getElementById(
-                                          `play-btn-${userId}`,
-                                        );
-                                        if (playBtn)
-                                          playBtn.style.opacity = "0";
-                                      })
-                                      .catch(() => {
-                                        const playBtn = document.getElementById(
-                                          `play-btn-${userId}`,
-                                        );
-                                        if (playBtn)
-                                          playBtn.style.opacity = "1";
-                                      });
-                                  }
-                                }, 100);
+                                const attemptPlay = () => {
+                                  el.play()
+                                    .then(() => {
+                                      console.log(`Remote video playing for ${userId}`);
+                                      const playBtn = document.getElementById(
+                                        `play-btn-${userId}`,
+                                      );
+                                      if (playBtn) playBtn.style.opacity = "0";
+                                    })
+                                    .catch((err) => {
+                                      console.log(`Remote video play failed for ${userId}, retrying...`, err);
+                                      setTimeout(attemptPlay, 500);
+                                    });
+                                };
+                                
+                                attemptPlay();
+                              } else if (el.paused && stream.active) {
+                                console.log(`Remote video for ${userId} is paused, attempting to play`);
+                                el.play()
+                                  .then(() => {
+                                    console.log(`Resumed remote video for ${userId}`);
+                                    const playBtn = document.getElementById(
+                                      `play-btn-${userId}`,
+                                    );
+                                    if (playBtn) playBtn.style.opacity = "0";
+                                  })
+                                  .catch((err) => {
+                                    console.log(`Remote video resume failed for ${userId}:`, err);
+                                  });
                               }
                             }
                           }}
