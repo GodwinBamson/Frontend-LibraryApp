@@ -6,6 +6,9 @@
 
 
 
+
+
+
 // // utils/webrtc.js
 // import { io } from "socket.io-client";
 
@@ -64,9 +67,12 @@
 
 //     console.log("Initializing WebRTC with:", { userId, username, role });
 
+//     // FIXED: Use the correct backend URL for production
 //     const serverUrl = process.env.NODE_ENV === 'production' 
-//       ? window.location.origin
+//       ? "https://library-server-5rpq.onrender.com" // Your backend URL
 //       : "http://localhost:5000";
+
+//     console.log("Connecting to Socket.IO server:", serverUrl);
 
 //     this.socket = io(serverUrl, {
 //       query: { userId, username, role },
@@ -926,6 +932,7 @@
 
 
 
+
 // utils/webrtc.js
 import { io } from "socket.io-client";
 
@@ -946,7 +953,8 @@ class WebRTCService {
     this.directMessages = [];
     this.pendingCalls = new Map();
     this.messageHistory = new Map();
-    this.pendingCallData = null; // Store incoming call data for after navigation
+    this.pendingCallData = null;
+    this.pendingIceCandidates = new Map(); // Store ICE candidates until remote description is set
 
     // Callbacks
     this.onUserJoined = null;
@@ -968,6 +976,12 @@ class WebRTCService {
         { urls: "stun:stun2.l.google.com:19302" },
         { urls: "stun:stun3.l.google.com:19302" },
         { urls: "stun:stun4.l.google.com:19302" },
+        // Add TURN servers for production (optional but recommended)
+        // {
+        //   urls: 'turn:your-turn-server.com:3478',
+        //   username: 'username',
+        //   credential: 'password'
+        // }
       ],
       iceCandidatePoolSize: 10,
     };
@@ -975,7 +989,6 @@ class WebRTCService {
 
   initialize(userId, username, role) {
     if (this.socket?.connected) {
-      // If we have a pending call, trigger the callback
       if (this.pendingCallData && this.onIncomingCall) {
         this.onIncomingCall(this.pendingCallData);
       }
@@ -984,9 +997,8 @@ class WebRTCService {
 
     console.log("Initializing WebRTC with:", { userId, username, role });
 
-    // FIXED: Use the correct backend URL for production
     const serverUrl = process.env.NODE_ENV === 'production' 
-      ? "https://library-server-5rpq.onrender.com" // Your backend URL
+      ? "https://library-server-5rpq.onrender.com"
       : "http://localhost:5000";
 
     console.log("Connecting to Socket.IO server:", serverUrl);
@@ -1020,7 +1032,6 @@ class WebRTCService {
       this.socket.emit("request-staff-list");
       this.socket.emit("request-message-history", this.currentUser.userId);
 
-      // If we have a pending call after reconnect, notify the UI
       if (this.pendingCallData && this.onIncomingCall) {
         this.onIncomingCall(this.pendingCallData);
       }
@@ -1030,11 +1041,7 @@ class WebRTCService {
       console.log("❌ Disconnected:", reason);
       this._handleStateChange("disconnected", reason);
       this.socketIdToUserId.clear();
-
-      this.peerConnections.forEach((pc, userId) => {
-        pc.close();
-      });
-      this.peerConnections.clear();
+      this._cleanupAllPeerConnections();
     });
 
     this.socket.on("connect_error", (error) => {
@@ -1098,6 +1105,7 @@ class WebRTCService {
       this.socketIdToUserId.set(data.socketId, data.userId);
 
       if (data.userId !== this.currentUser?.userId) {
+        // Wait a bit for the connection to be ready
         setTimeout(() => this._createOffer(data.userId), 1000);
       }
       this.onUserJoined?.(data);
@@ -1105,20 +1113,17 @@ class WebRTCService {
 
     this.socket.on("user-left", (data) => {
       console.log("👋 User left:", data.username);
-
       this.socketIdToUserId.delete(data.socketId);
       this._cleanupPeerConnection(data.userId);
       this.onUserLeft?.(data);
     });
 
-    // Handle call initiation - STORE the call data
     this.socket.on("call-initiated", ({ from, roomId, callType }) => {
       console.log(`📞 Incoming ${callType} call from:`, from);
       const callData = { from, roomId, callType };
       this.pendingCallData = callData;
       this.pendingCalls.set(from.userId, callData);
       
-      // Always trigger the callback if it exists
       if (this.onIncomingCall) {
         this.onIncomingCall(callData);
       }
@@ -1147,7 +1152,7 @@ class WebRTCService {
       this._handleStateChange("room_joined", data.roomId);
 
       this.pendingCalls.clear();
-      this.pendingCallData = null; // Clear pending call data
+      this.pendingCallData = null;
 
       if (data.chatHistory) {
         const history = Array.isArray(data.chatHistory) ? data.chatHistory : [];
@@ -1162,38 +1167,37 @@ class WebRTCService {
         participants.forEach((p) => {
           const targetUserId = p.userId;
           if (targetUserId && targetUserId !== this.currentUser?.userId) {
+            // Create offer for existing participants
             setTimeout(() => this._createOffer(targetUserId), 1500);
           }
         });
       }
     });
 
+    // FIXED: Handle offer with proper async/await
     this.socket.on("offer", async ({ from, fromUserId, fromUsername, offer }) => {
       console.log("📞 Received offer from:", fromUsername);
       this.socketIdToUserId.set(from, fromUserId);
-      await this._handleOffer(fromUserId, offer);
+      
+      try {
+        await this._handleOffer(fromUserId, offer);
+      } catch (error) {
+        console.error("Error handling offer:", error);
+      }
     });
 
+    // FIXED: Handle answer
     this.socket.on("answer", ({ from, fromUsername, answer }) => {
       console.log("📞 Received answer from:", fromUsername);
       const fromUserId = this.socketIdToUserId.get(from) || from;
-      const pc = this.peerConnections.get(fromUserId);
-      if (pc && pc.signalingState !== "stable") {
-        pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(
-          (err) => console.error("Error setting remote description:", err),
-        );
-      }
+      this._handleAnswer(fromUserId, answer);
     });
 
+    // FIXED: Handle ICE candidates with queuing
     this.socket.on("ice-candidate", ({ from, fromUsername, candidate }) => {
       console.log("❄️ Received ICE candidate from:", fromUsername);
       const fromUserId = this.socketIdToUserId.get(from) || from;
-      const pc = this.peerConnections.get(fromUserId);
-      if (pc) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
-          console.error("Error adding ICE candidate:", err),
-        );
-      }
+      this._handleIceCandidate(fromUserId, candidate);
     });
 
     this.socket.on("receive-message", (message) => {
@@ -1230,6 +1234,59 @@ class WebRTCService {
         }
       });
     });
+  }
+
+  // FIXED: New method to handle answer
+  _handleAnswer(userId, answer) {
+    const pc = this.peerConnections.get(userId);
+    if (!pc) {
+      console.log(`No peer connection for ${userId}, cannot set answer`);
+      return;
+    }
+
+    if (pc.signalingState === "have-local-offer") {
+      pc.setRemoteDescription(new RTCSessionDescription(answer))
+        .then(() => {
+          console.log(`✅ Remote description set for ${userId}`);
+          
+          // Process any pending ICE candidates
+          const pendingCandidates = this.pendingIceCandidates.get(userId) || [];
+          pendingCandidates.forEach(candidate => {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err =>
+              console.error("Error adding pending ICE candidate:", err)
+            );
+          });
+          this.pendingIceCandidates.delete(userId);
+        })
+        .catch(err => console.error("Error setting remote description:", err));
+    } else {
+      console.log(`Cannot set answer, current signaling state: ${pc.signalingState}`);
+    }
+  }
+
+  // FIXED: New method to handle ICE candidates with queuing
+  _handleIceCandidate(userId, candidate) {
+    const pc = this.peerConnections.get(userId);
+    
+    if (!pc) {
+      console.log(`No peer connection for ${userId}, cannot add ICE candidate`);
+      return;
+    }
+
+    // If remote description is not set yet, queue the candidate
+    if (!pc.currentRemoteDescription && !pc.remoteDescription) {
+      console.log(`Remote description not set yet, queuing ICE candidate for ${userId}`);
+      if (!this.pendingIceCandidates.has(userId)) {
+        this.pendingIceCandidates.set(userId, []);
+      }
+      this.pendingIceCandidates.get(userId).push(candidate);
+      return;
+    }
+
+    // Remote description is set, add candidate immediately
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err =>
+      console.error("Error adding ICE candidate:", err)
+    );
   }
 
   sendDirectMessage(targetUserId, text, messageType = "text", mediaUrl = null) {
@@ -1308,28 +1365,13 @@ class WebRTCService {
     });
   }
 
-  getMessageHistory(key) {
-    return this.messageHistory.get(key) || [];
-  }
-
-  clearChatHistory(key) {
-    if (key) {
-      this.messageHistory.delete(key);
-    } else {
-      this.messageHistory.clear();
-    }
-  }
-
   async startCall(targetUserId, callType = "video") {
     if (!this.socket?.connected) {
       throw new Error("Socket not connected");
     }
 
-    let pc = this.peerConnections.get(targetUserId);
-    if (pc) {
-      pc.close();
-      this.peerConnections.delete(targetUserId);
-    }
+    // Clean up any existing connection
+    this._cleanupPeerConnection(targetUserId);
 
     this.currentCallType = callType;
 
@@ -1420,7 +1462,7 @@ class WebRTCService {
         this.socket.once("room-joined", (data) => {
           clearTimeout(timeout);
           console.log("Call joined successfully:", data);
-          this.pendingCallData = null; // Clear pending call data
+          this.pendingCallData = null;
           resolve(data);
         });
 
@@ -1437,7 +1479,7 @@ class WebRTCService {
       const hasVideo = this.localStream.getVideoTracks().length > 0;
       const hasAudio = this.localStream.getAudioTracks().length > 0;
 
-      if ((video && !hasVideo) || (!video && hasVideo)) {
+      if ((video && !hasVideo) || (!video && hasVideo) || (audio && !hasAudio) || (!audio && hasAudio)) {
         console.log("Recreating stream for different media type");
         this.localStream.getTracks().forEach((track) => track.stop());
         this.localStream = null;
@@ -1468,8 +1510,6 @@ class WebRTCService {
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
-              sampleRate: 48000,
-              channelCount: 2,
             }
           : false,
       };
@@ -1537,16 +1577,17 @@ class WebRTCService {
 
   _createPeerConnection(userId) {
     if (this.peerConnections.has(userId)) {
-      const oldPc = this.peerConnections.get(userId);
-      oldPc.close();
-      this.peerConnections.delete(userId);
+      this._cleanupPeerConnection(userId);
     }
 
+    console.log(`Creating peer connection for ${userId}`);
+    
     const pc = new RTCPeerConnection({
       iceServers: this.config.iceServers,
       iceCandidatePoolSize: this.config.iceCandidatePoolSize,
     });
 
+    // Add local tracks
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
         console.log(`Adding ${track.kind} track to peer connection for ${userId}`);
@@ -1554,6 +1595,7 @@ class WebRTCService {
       });
     }
 
+    // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         console.log(`❄️ Sending ICE candidate for ${userId}`);
@@ -1564,17 +1606,27 @@ class WebRTCService {
       }
     };
 
+    // Handle connection state changes
     pc.oniceconnectionstatechange = () => {
       console.log(`❄️ ICE state with ${userId}:`, pc.iceConnectionState);
-
+      
       if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
         console.log(`✅ Connection established with ${userId}`);
       } else if (pc.iceConnectionState === "failed") {
         console.log(`❌ Connection failed with ${userId}`);
+        // Attempt to restart ICE
         pc.restartIce();
+      } else if (pc.iceConnectionState === "disconnected") {
+        console.log(`⚠️ Connection disconnected with ${userId}`);
       }
     };
 
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log(`🔌 Connection state with ${userId}:`, pc.connectionState);
+    };
+
+    // Handle incoming tracks
     pc.ontrack = (event) => {
       console.log(`📡 Received ${event.track.kind} track from:`, userId);
       const [stream] = event.streams;
@@ -1592,6 +1644,11 @@ class WebRTCService {
       }
     };
 
+    // Handle negotiation needed
+    pc.onnegotiationneeded = () => {
+      console.log(`🔄 Negotiation needed for ${userId}`);
+    };
+
     this.peerConnections.set(userId, pc);
     return pc;
   }
@@ -1603,15 +1660,22 @@ class WebRTCService {
         pc = this._createPeerConnection(userId);
       }
 
+      // Wait for stable state
       if (pc.signalingState !== "stable") {
         console.log(`Signaling state not stable for ${userId}, current state:`, pc.signalingState);
-        
-        if (pc.signalingState === "have-local-offer") {
-          console.log("Waiting for local offer to be accepted...");
-          return;
-        }
+        await new Promise(resolve => {
+          const checkState = () => {
+            if (pc.signalingState === "stable") {
+              resolve();
+            } else {
+              setTimeout(checkState, 100);
+            }
+          };
+          checkState();
+        });
       }
 
+      console.log(`Creating offer for ${userId}`);
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: this.currentCallType === "video",
@@ -1625,7 +1689,6 @@ class WebRTCService {
         offer: pc.localDescription,
       });
 
-      console.log("📞 Offer sent to:", userId);
     } catch (error) {
       console.error("Error creating offer:", error);
     }
@@ -1640,6 +1703,7 @@ class WebRTCService {
         pc = this._createPeerConnection(fromUserId);
       }
 
+      // Wait for stable state
       if (pc.signalingState !== "stable") {
         console.log(`Current signaling state: ${pc.signalingState}, waiting for stability`);
         await new Promise(resolve => {
@@ -1655,6 +1719,16 @@ class WebRTCService {
       }
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log(`✅ Remote description set for ${fromUserId}`);
+
+      // Process any pending ICE candidates
+      const pendingCandidates = this.pendingIceCandidates.get(fromUserId) || [];
+      pendingCandidates.forEach(candidate => {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err =>
+          console.error("Error adding pending ICE candidate:", err)
+        );
+      });
+      this.pendingIceCandidates.delete(fromUserId);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -1665,7 +1739,6 @@ class WebRTCService {
         answer: pc.localDescription,
       });
 
-      console.log("📞 Answer sent to:", fromUserId);
     } catch (error) {
       console.error("Error handling offer:", error);
     }
@@ -1678,12 +1751,21 @@ class WebRTCService {
       this.peerConnections.delete(userId);
     }
     this.remoteStreams.delete(userId);
+    this.pendingIceCandidates.delete(userId);
 
+    // Clean up socketId mappings
     this.socketIdToUserId.forEach((value, key) => {
       if (value === userId) {
         this.socketIdToUserId.delete(key);
       }
     });
+  }
+
+  _cleanupAllPeerConnections() {
+    this.peerConnections.forEach((pc) => pc.close());
+    this.peerConnections.clear();
+    this.remoteStreams.clear();
+    this.pendingIceCandidates.clear();
   }
 
   _handleStateChange(state, data) {
@@ -1732,7 +1814,7 @@ class WebRTCService {
         this.stopScreenShare();
       };
 
-      this.socket.emit("screen-share-start", { roomId: this.currentRoom });
+      this.socket?.emit("screen-share-started", { roomId: this.currentRoom });
 
       return screenStream;
     } catch (error) {
@@ -1753,7 +1835,7 @@ class WebRTCService {
       });
     }
 
-    this.socket.emit("screen-share-stop", { roomId: this.currentRoom });
+    this.socket?.emit("screen-share-stopped", { roomId: this.currentRoom });
   }
 
   leaveRoom() {
@@ -1761,9 +1843,7 @@ class WebRTCService {
       this.socket.emit("leave-room", this.currentRoom);
     }
 
-    this.peerConnections.forEach((pc) => pc.close());
-    this.peerConnections.clear();
-    this.remoteStreams.clear();
+    this._cleanupAllPeerConnections();
     this.pendingCalls.clear();
     this.pendingCallData = null;
 
@@ -1786,13 +1866,12 @@ class WebRTCService {
     }
 
     this.socketIdToUserId.clear();
-    this.peerConnections.clear();
-    this.remoteStreams.clear();
     this.pendingCalls.clear();
     this.pendingCallData = null;
     this.availableStaff = [];
     this.directMessages = [];
     this.messageHistory.clear();
+    this.pendingIceCandidates.clear();
   }
 
   isConnected() {
@@ -1832,12 +1911,10 @@ class WebRTCService {
     }
   }
 
-  // New method to check for pending calls
   hasPendingCall() {
     return this.pendingCallData !== null;
   }
 
-  // New method to get pending call data
   getPendingCall() {
     return this.pendingCallData;
   }
