@@ -685,20 +685,32 @@
 //     }
 //   `;
 
-//   // Get user from localStorage
+//   // Get user from localStorage - FIXED
 //   useEffect(() => {
 //     try {
 //       const userStr = localStorage.getItem("user");
 //       if (userStr) {
 //         const parsedUser = JSON.parse(userStr);
-//         setUser(parsedUser);
+//         // Normalize user object properties
+//         const normalizedUser = {
+//           ...parsedUser,
+//           username:
+//             parsedUser.username ||
+//             parsedUser.name ||
+//             parsedUser.email ||
+//             "User",
+//           userId: parsedUser._id || parsedUser.id || parsedUser.userId,
+//           role: parsedUser.role || "patient",
+//         };
+//         setUser(normalizedUser);
+//         console.log("User loaded:", normalizedUser);
 //       }
 //     } catch (error) {
 //       console.error("Error parsing user from localStorage:", error);
 //     }
 //   }, []);
 
-//   // Initialize WebRTC and set up callbacks
+//   // Initialize WebRTC and set up callbacks - FIXED
 //   useEffect(() => {
 //     if (!user) return;
 
@@ -708,8 +720,17 @@
 //       return;
 //     }
 
+//     // Get username with fallback
+//     const username = user.username || user.name || user.email || "User";
+
+//     console.log("Initializing WebRTC with:", {
+//       userId,
+//       username,
+//       role: user.role,
+//     });
+
 //     // Initialize WebRTC service
-//     WebRTCService.initialize(userId, user.username, user.role);
+//     WebRTCService.initialize(userId, username, user.role);
 //     setIsInitialized(true);
 
 //     // Check for pending call
@@ -2681,7 +2702,6 @@
 
 
 
-
 /* eslint-disable no-unused-vars */
 
 import { useEffect, useRef, useState, useMemo } from "react";
@@ -2717,6 +2737,9 @@ import {
   Filter,
   SortAsc,
   SortDesc,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
 
 const VideoConsultation = () => {
@@ -2767,6 +2790,9 @@ const VideoConsultation = () => {
   const [playbackRate, setPlaybackRate] = useState({});
   const [showReactions, setShowReactions] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [serverStatus, setServerStatus] = useState("checking");
+  const [showReconnect, setShowReconnect] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const localVideoRef = useRef();
   const remoteVideosRef = useRef({});
@@ -2778,6 +2804,7 @@ const VideoConsultation = () => {
   const reconnectAttemptsRef = useRef(0);
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef();
+  const healthCheckIntervalRef = useRef(null);
 
   // Emoji list (common emojis only)
   const emojis = [
@@ -2788,23 +2815,7 @@ const VideoConsultation = () => {
     "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡",
     "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓",
     "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄",
-    "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵",
-    "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠",
-    "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽",
-    "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀",
-    "😿", "😾", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍",
-    "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖",
-    "💘", "💝", "💟", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️", "🔯",
-    "🕎", "☯️", "☦️", "🛐", "⛎", "♈", "♉", "♊", "♋", "♌",
-    "♍", "♎", "♏", "♐", "♑", "♒", "♓", "🆔", "⚛️", "🉑",
-    "☢️", "☣️", "📴", "📳", "🈶", "🈚", "🈸", "🈺", "🈷️", "✴️",
-    "🆚", "💮", "🉐", "㊙️", "㊗️", "🈴", "🈵", "🈹", "🈲", "🅰️",
-    "🅱️", "🆎", "🆑", "🅾️", "🆘", "❌", "⭕", "🛑", "⛔", "📛",
-    "🚫", "💯", "💢", "♨️", "🚷", "🚯", "🚳", "🚱", "🔞", "📵",
-    "🚭", "❗", "❕", "❓", "❔", "‼️", "⁉️", "🔅", "🔆", "〽️",
-    "⚠️", "🚸", "🔱", "⚜️", "🔰", "♻️", "✅", "🈯", "💹", "❇️",
-    "✳️", "❎", "🌐", "💠", "Ⓜ️", "🌀", "💤", "🏧", "🚾", "♿",
-    "🅿️", "🈳", "🈂️",
+    "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔"
   ];
 
   const styles = `
@@ -2857,10 +2868,6 @@ const VideoConsultation = () => {
       opacity: 1;
     }
     
-    .debug-overlay {
-      z-index: 100;
-    }
-    
     .connection-indicator {
       position: absolute;
       top: 8px;
@@ -2884,6 +2891,32 @@ const VideoConsultation = () => {
     .connection-bad {
       background-color: #ef4444;
       box-shadow: 0 0 8px #ef4444;
+    }
+
+    .server-status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: #1f2937;
+      border-radius: 9999px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .server-status.online {
+      border-left: 4px solid #10b981;
+    }
+
+    .server-status.offline {
+      border-left: 4px solid #ef4444;
+    }
+
+    .server-status.checking {
+      border-left: 4px solid #f59e0b;
     }
 
     .call-button {
@@ -3046,121 +3079,61 @@ const VideoConsultation = () => {
       padding: 0 4px;
     }
 
-    .message-media {
-      max-width: 200px;
-      max-height: 150px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
+    .reconnect-button {
+      animation: pulse 2s infinite;
     }
 
-    .message-media:hover {
-      transform: scale(1.02);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .media-viewer {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
-      z-index: 2000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .media-viewer-content {
-      max-width: 90%;
-      max-height: 90%;
-      position: relative;
-    }
-
-    .media-viewer-close {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      color: white;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .media-viewer-close:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .upload-progress {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      height: 2px;
-      background: #3b82f6;
-      transition: width 0.3s;
-    }
-
-    .selection-mode {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1f2937;
-      border-radius: 9999px;
-      padding: 8px 16px;
-      display: flex;
-      gap: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      z-index: 1000;
-    }
-
-    .search-highlight {
-      background: #fbbf24;
-      color: #000;
-      border-radius: 2px;
-    }
-
-    .message-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 14px;
-    }
-
-    .message-timestamp {
-      font-size: 10px;
-      opacity: 0.6;
-    }
-
-    .message-status {
-      font-size: 10px;
-      display: inline-flex;
-      align-items: center;
-      gap: 2px;
-    }
-
-    .read-receipt {
-      color: #60a5fa;
-    }
-
-    .delivered {
-      color: #9ca3af;
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
   `;
 
-  // Get user from localStorage - FIXED
+  // Health check function
+  const checkServerHealth = async () => {
+    try {
+      setServerStatus("checking");
+      const isHealthy = await WebRTCService.checkServerHealth();
+      setServerStatus(isHealthy ? "online" : "offline");
+      
+      if (!isHealthy && !WebRTCService.isConnected()) {
+        setShowReconnect(true);
+        setError("Server is not responding. Please check your connection.");
+      } else {
+        setShowReconnect(false);
+        if (isHealthy && !WebRTCService.isConnected() && user) {
+          // Attempt to reconnect if server is healthy but we're disconnected
+          attemptReconnect();
+        }
+      }
+    } catch (error) {
+      setServerStatus("offline");
+      setShowReconnect(true);
+    }
+  };
+
+  // Reconnection function
+  const attemptReconnect = () => {
+    if (!user || reconnecting) return;
+    
+    setReconnecting(true);
+    setError("Attempting to reconnect...");
+    
+    // Disconnect existing socket
+    WebRTCService.disconnect();
+    
+    // Reinitialize
+    const userId = user._id || user.id || user.userId;
+    const username = user.username || user.name || user.email || "User";
+    
+    setTimeout(() => {
+      WebRTCService.initialize(userId, username, user.role);
+      setReconnecting(false);
+      setError(null);
+    }, 2000);
+  };
+
+  // Get user from localStorage
   useEffect(() => {
     try {
       const userStr = localStorage.getItem("user");
@@ -3169,9 +3142,13 @@ const VideoConsultation = () => {
         // Normalize user object properties
         const normalizedUser = {
           ...parsedUser,
-          username: parsedUser.username || parsedUser.name || parsedUser.email || "User",
+          username:
+            parsedUser.username ||
+            parsedUser.name ||
+            parsedUser.email ||
+            "User",
           userId: parsedUser._id || parsedUser.id || parsedUser.userId,
-          role: parsedUser.role || "patient"
+          role: parsedUser.role || "patient",
         };
         setUser(normalizedUser);
         console.log("User loaded:", normalizedUser);
@@ -3181,7 +3158,7 @@ const VideoConsultation = () => {
     }
   }, []);
 
-  // Initialize WebRTC and set up callbacks - FIXED
+  // Initialize WebRTC and set up callbacks
   useEffect(() => {
     if (!user) return;
 
@@ -3193,12 +3170,20 @@ const VideoConsultation = () => {
 
     // Get username with fallback
     const username = user.username || user.name || user.email || "User";
-    
-    console.log("Initializing WebRTC with:", { userId, username, role: user.role });
+
+    console.log("Initializing WebRTC with:", {
+      userId,
+      username,
+      role: user.role,
+    });
 
     // Initialize WebRTC service
     WebRTCService.initialize(userId, username, user.role);
     setIsInitialized(true);
+
+    // Start health checks
+    checkServerHealth();
+    healthCheckIntervalRef.current = setInterval(checkServerHealth, 30000); // Check every 30 seconds
 
     // Check for pending call
     if (WebRTCService.hasPendingCall && WebRTCService.hasPendingCall()) {
@@ -3221,9 +3206,13 @@ const VideoConsultation = () => {
         setIsConnecting(false);
         setError(null);
         reconnectAttemptsRef.current = 0;
+        setShowReconnect(false);
       } else if (state === "error") {
         setError(data);
         setIsConnecting(false);
+        setShowReconnect(true);
+      } else if (state === "disconnected") {
+        setShowReconnect(true);
       } else if (state === "room_joined") {
         if (WebRTCService.socket) {
           WebRTCService.socket.emit("request-chat-history", data);
@@ -3361,6 +3350,9 @@ const VideoConsultation = () => {
     return () => {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
+      }
+      if (healthCheckIntervalRef.current) {
+        clearInterval(healthCheckIntervalRef.current);
       }
       leaveCall();
       WebRTCService.disconnect();
@@ -3566,6 +3558,12 @@ const VideoConsultation = () => {
       return;
     }
 
+    // Check server status before attempting call
+    if (serverStatus === "offline") {
+      setError("Server is offline. Please check your connection.");
+      return;
+    }
+
     try {
       setIsConnecting(true);
       setError(null);
@@ -3593,6 +3591,12 @@ const VideoConsultation = () => {
 
   const acceptCall = async () => {
     if (!incomingCall) return;
+
+    // Check server status before accepting call
+    if (serverStatus === "offline") {
+      setError("Server is offline. Please check your connection.");
+      return;
+    }
 
     try {
       setIsConnecting(true);
@@ -3649,6 +3653,12 @@ const VideoConsultation = () => {
   const sendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim() && !replyingTo) return;
+
+    // Check connection before sending
+    if (!WebRTCService.isConnected()) {
+      setError("Not connected to server. Please wait for reconnection.");
+      return;
+    }
 
     let message;
 
@@ -4005,6 +4015,29 @@ const VideoConsultation = () => {
     <>
       <style>{styles}</style>
 
+      {/* Server Status Indicator */}
+      <div className={`server-status ${serverStatus}`}>
+        {serverStatus === "online" ? (
+          <Wifi size={16} className="text-green-500" />
+        ) : serverStatus === "offline" ? (
+          <WifiOff size={16} className="text-red-500" />
+        ) : (
+          <RefreshCw size={16} className="text-yellow-500 animate-spin" />
+        )}
+        <span className="text-white text-sm">
+          Server: {serverStatus === "online" ? "Online" : serverStatus === "offline" ? "Offline" : "Checking..."}
+        </span>
+        {showReconnect && (
+          <button
+            onClick={attemptReconnect}
+            disabled={reconnecting}
+            className="ml-2 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 reconnect-button"
+          >
+            {reconnecting ? "Reconnecting..." : "Reconnect"}
+          </button>
+        )}
+      </div>
+
       {/* Loading State */}
       {!isInitialized && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]">
@@ -4221,6 +4254,19 @@ const VideoConsultation = () => {
                     </div>
                   )}
 
+                  {serverStatus === "offline" && (
+                    <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-700 text-yellow-200 rounded-lg">
+                      Server is offline. Please check your connection and try again.
+                      <button
+                        onClick={attemptReconnect}
+                        disabled={reconnecting}
+                        className="ml-2 px-2 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 disabled:opacity-50"
+                      >
+                        {reconnecting ? "Reconnecting..." : "Reconnect"}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="mb-4 p-3 bg-gray-700 rounded-lg">
                     <p className="text-sm text-gray-300">
                       <span className="font-semibold">You:</span>{" "}
@@ -4278,14 +4324,15 @@ const VideoConsultation = () => {
                                       setShowStaffList(false);
                                       setChatMode("private");
                                     }}
-                                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm flex items-center justify-center space-x-1"
+                                    disabled={serverStatus === "offline"}
+                                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <MessageCircle size={16} />
                                     <span>Chat</span>
                                   </button>
                                   <button
                                     onClick={() => startCall(staff, "audio")}
-                                    disabled={isConnecting}
+                                    disabled={isConnecting || serverStatus === "offline"}
                                     className="flex-1 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-1"
                                   >
                                     <PhoneCall size={16} />
@@ -4293,7 +4340,7 @@ const VideoConsultation = () => {
                                   </button>
                                   <button
                                     onClick={() => startCall(staff, "video")}
-                                    disabled={isConnecting}
+                                    disabled={isConnecting || serverStatus === "offline"}
                                     className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-1"
                                   >
                                     <VideoIcon size={16} />
@@ -4390,7 +4437,7 @@ const VideoConsultation = () => {
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             className="bg-gray-600 text-white p-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            disabled={isUploading}
+                            disabled={isUploading || serverStatus === "offline"}
                           >
                             <Paperclip size={18} />
                           </button>
@@ -4398,6 +4445,7 @@ const VideoConsultation = () => {
                             type="button"
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                             className="bg-gray-600 text-white p-2 rounded-lg hover:bg-gray-700 transition-colors relative"
+                            disabled={serverStatus === "offline"}
                           >
                             <Smile size={18} />
                             {showEmojiPicker && (
@@ -4422,10 +4470,11 @@ const VideoConsultation = () => {
                             }}
                             placeholder={`Message ${selectedStaff.username}...`}
                             className="flex-1 bg-gray-600 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                            disabled={serverStatus === "offline"}
                           />
                           <button
                             type="submit"
-                            disabled={!newMessage.trim() || isUploading}
+                            disabled={!newMessage.trim() || isUploading || serverStatus === "offline"}
                             className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             <Send size={18} />
@@ -5027,7 +5076,7 @@ const VideoConsultation = () => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-gray-700 text-white p-2 rounded-lg hover:bg-gray-600 transition-colors"
-                    disabled={isUploading}
+                    disabled={isUploading || serverStatus === "offline"}
                   >
                     <Paperclip size={18} />
                   </button>
@@ -5035,6 +5084,7 @@ const VideoConsultation = () => {
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     className="bg-gray-700 text-white p-2 rounded-lg hover:bg-gray-600 transition-colors relative"
+                    disabled={serverStatus === "offline"}
                   >
                     <Smile size={18} />
                     {showEmojiPicker && (
@@ -5070,7 +5120,8 @@ const VideoConsultation = () => {
                     className="flex-1 bg-gray-700 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
                     disabled={
                       (!WebRTCService.currentRoom && !selectedStaff) ||
-                      isUploading
+                      isUploading ||
+                      serverStatus === "offline"
                     }
                   />
                   <button
@@ -5078,7 +5129,8 @@ const VideoConsultation = () => {
                     disabled={
                       !newMessage.trim() ||
                       (!WebRTCService.currentRoom && !selectedStaff) ||
-                      isUploading
+                      isUploading ||
+                      serverStatus === "offline"
                     }
                     className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
