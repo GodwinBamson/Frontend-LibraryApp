@@ -1,0 +1,924 @@
+/* eslint-disable no-dupe-class-members */
+/* eslint-disable no-undef */
+/* eslint-disable no-async-promise-executor */
+/* eslint-disable no-unused-vars */
+
+
+
+
+// utils/webrtc.js
+import { io } from "socket.io-client";
+
+class WebRTCService {
+  constructor() {
+    // Core properties
+    this.socket = null;
+    this.peerConnections = new Map();
+    this.socketIdToUserId = new Map();
+    this.localStream = null;
+    this.remoteStreams = new Map();
+    this.currentRoom = null;
+    this.currentUser = null;
+    this.currentCallType = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 3;
+    this.availableStaff = [];
+    this.directMessages = [];
+    this.pendingCalls = new Map();
+    this.messageHistory = new Map();
+    this.pendingCallData = null; // Store incoming call data for after navigation
+
+    // Callbacks
+    this.onUserJoined = null;
+    this.onUserLeft = null;
+    this.onMessageReceived = null;
+    this.onDirectMessageReceived = null;
+    this.onRemoteStream = null;
+    this.onConnectionStateChange = null;
+    this.onAudioLevelChange = null;
+    this.onStaffListUpdate = null;
+    this.onCallRejected = null;
+    this.onIncomingCall = null;
+
+    // Configuration
+    this.config = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+      ],
+      iceCandidatePoolSize: 10,
+    };
+  }
+
+  initialize(userId, username, role) {
+    if (this.socket?.connected) {
+      // If we have a pending call, trigger the callback
+      if (this.pendingCallData && this.onIncomingCall) {
+        this.onIncomingCall(this.pendingCallData);
+      }
+      return this.socket;
+    }
+
+    console.log("Initializing WebRTC with:", { userId, username, role });
+
+    const serverUrl = process.env.NODE_ENV === 'production' 
+      ? window.location.origin
+      : "http://localhost:5000";
+
+    this.socket = io(serverUrl, {
+      query: { userId, username, role },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
+      withCredentials: true
+    });
+
+    this.currentUser = { userId, username, role };
+    this._setupListeners();
+
+    return this.socket;
+  }
+
+  _setupListeners() {
+    this.socket.on("connect", () => {
+      console.log("✅ Connected to server");
+      this._handleStateChange("connected");
+      this.reconnectAttempts = 0;
+
+      if (this.socket && this.currentUser) {
+        this.socketIdToUserId.set(this.socket.id, this.currentUser.userId);
+      }
+
+      this.socket.emit("request-staff-list");
+      this.socket.emit("request-message-history", this.currentUser.userId);
+
+      // If we have a pending call after reconnect, notify the UI
+      if (this.pendingCallData && this.onIncomingCall) {
+        this.onIncomingCall(this.pendingCallData);
+      }
+    });
+
+    this.socket.on("disconnect", (reason) => {
+      console.log("❌ Disconnected:", reason);
+      this._handleStateChange("disconnected", reason);
+      this.socketIdToUserId.clear();
+
+      this.peerConnections.forEach((pc, userId) => {
+        pc.close();
+      });
+      this.peerConnections.clear();
+    });
+
+    this.socket.on("connect_error", (error) => {
+      console.error("🔴 Connection error:", error);
+      this._handleStateChange("error", error.message);
+    });
+
+    this.socket.on("staff-list", (staffList) => {
+      console.log("📋 Available staff:", staffList);
+      this.availableStaff = Array.isArray(staffList) ? staffList : [];
+      this.onStaffListUpdate?.(this.availableStaff);
+    });
+
+    this.socket.on("staff-available", (staff) => {
+      console.log("🟢 Staff available:", staff.username);
+      this.availableStaff = [...this.availableStaff, staff];
+      this.onStaffListUpdate?.(this.availableStaff);
+    });
+
+    this.socket.on("staff-unavailable", (data) => {
+      const staffId = typeof data === 'string' ? data : data.userId;
+      console.log("🔴 Staff unavailable:", staffId);
+      this.availableStaff = this.availableStaff.filter(
+        (s) => s.userId !== staffId,
+      );
+      this.onStaffListUpdate?.(this.availableStaff);
+    });
+
+    this.socket.on("message-history", (data) => {
+      console.log("📜 Received message history");
+      const history = Array.isArray(data) ? data : data?.roomHistories || [];
+      history.forEach((msg) => {
+        const key = msg.roomId || msg.conversationId || "direct";
+        if (!this.messageHistory.has(key)) {
+          this.messageHistory.set(key, []);
+        }
+        this.messageHistory.get(key).push(msg);
+      });
+    });
+
+    this.socket.on("direct-message", (message) => {
+      console.log("💬 Direct message received:", message);
+      this.directMessages.push(message);
+
+      if (message.sender && this.currentUser) {
+        const conversationId = [this.currentUser.userId, message.sender.userId]
+          .sort()
+          .join("-");
+        if (!this.messageHistory.has(conversationId)) {
+          this.messageHistory.set(conversationId, []);
+        }
+        this.messageHistory.get(conversationId).push(message);
+      }
+
+      this.onDirectMessageReceived?.(message);
+    });
+
+    this.socket.on("user-joined", async (data) => {
+      console.log("👥 User joined:", data.username);
+
+      this.socketIdToUserId.set(data.socketId, data.userId);
+
+      if (data.userId !== this.currentUser?.userId) {
+        setTimeout(() => this._createOffer(data.userId), 1000);
+      }
+      this.onUserJoined?.(data);
+    });
+
+    this.socket.on("user-left", (data) => {
+      console.log("👋 User left:", data.username);
+
+      this.socketIdToUserId.delete(data.socketId);
+      this._cleanupPeerConnection(data.userId);
+      this.onUserLeft?.(data);
+    });
+
+    // Handle call initiation - STORE the call data
+    this.socket.on("call-initiated", ({ from, roomId, callType }) => {
+      console.log(`📞 Incoming ${callType} call from:`, from);
+      const callData = { from, roomId, callType };
+      this.pendingCallData = callData;
+      this.pendingCalls.set(from.userId, callData);
+      
+      // Always trigger the callback if it exists
+      if (this.onIncomingCall) {
+        this.onIncomingCall(callData);
+      }
+    });
+
+    this.socket.on("call-rejected", ({ from, callType }) => {
+      console.log(`❌ Call rejected by:`, from);
+      this.pendingCalls.delete(from.userId);
+      if (this.pendingCallData?.from.userId === from.userId) {
+        this.pendingCallData = null;
+      }
+      this.onCallRejected?.(from, callType);
+    });
+
+    this.socket.on("call-accepted", ({ from, roomId, callType }) => {
+      console.log(`✅ Call accepted by:`, from);
+      if (this.currentRoom !== roomId) {
+        this.currentRoom = roomId;
+        this.currentCallType = callType;
+        this.socket.emit("join-room", { roomId, callType });
+      }
+    });
+
+    this.socket.on("room-joined", (data) => {
+      console.log("🚪 Joined room:", data.roomId);
+      this._handleStateChange("room_joined", data.roomId);
+
+      this.pendingCalls.clear();
+      this.pendingCallData = null; // Clear pending call data
+
+      if (data.chatHistory) {
+        const history = Array.isArray(data.chatHistory) ? data.chatHistory : [];
+        this.messageHistory.set(data.roomId, history);
+        history.forEach((msg) => {
+          this.onMessageReceived?.(msg);
+        });
+      }
+
+      if (data.participants) {
+        const participants = Array.isArray(data.participants) ? data.participants : [];
+        participants.forEach((p) => {
+          const targetUserId = p.userId;
+          if (targetUserId && targetUserId !== this.currentUser?.userId) {
+            setTimeout(() => this._createOffer(targetUserId), 1500);
+          }
+        });
+      }
+    });
+
+    this.socket.on("offer", async ({ from, fromUserId, fromUsername, offer }) => {
+      console.log("📞 Received offer from:", fromUsername);
+      this.socketIdToUserId.set(from, fromUserId);
+      await this._handleOffer(fromUserId, offer);
+    });
+
+    this.socket.on("answer", ({ from, fromUsername, answer }) => {
+      console.log("📞 Received answer from:", fromUsername);
+      const fromUserId = this.socketIdToUserId.get(from) || from;
+      const pc = this.peerConnections.get(fromUserId);
+      if (pc && pc.signalingState !== "stable") {
+        pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(
+          (err) => console.error("Error setting remote description:", err),
+        );
+      }
+    });
+
+    this.socket.on("ice-candidate", ({ from, fromUsername, candidate }) => {
+      console.log("❄️ Received ICE candidate from:", fromUsername);
+      const fromUserId = this.socketIdToUserId.get(from) || from;
+      const pc = this.peerConnections.get(fromUserId);
+      if (pc) {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
+          console.error("Error adding ICE candidate:", err),
+        );
+      }
+    });
+
+    this.socket.on("receive-message", (message) => {
+      console.log("💬 Room message received:", message);
+      if (message.roomId) {
+        if (!this.messageHistory.has(message.roomId)) {
+          this.messageHistory.set(message.roomId, []);
+        }
+        this.messageHistory.get(message.roomId).push(message);
+      }
+      this.onMessageReceived?.(message);
+    });
+
+    this.socket.on("message-reaction", ({ messageId, reaction, userId }) => {
+      console.log("👍 Message reaction:", { messageId, reaction, userId });
+      this.messageHistory.forEach((messages) => {
+        const msg = messages.find((m) => m.id === messageId);
+        if (msg) {
+          if (!msg.reactions) msg.reactions = {};
+          if (!msg.reactions[reaction]) msg.reactions[reaction] = [];
+          if (!msg.reactions[reaction].includes(userId)) {
+            msg.reactions[reaction].push(userId);
+          }
+        }
+      });
+    });
+
+    this.socket.on("message-deleted", ({ messageId }) => {
+      console.log("🗑️ Message deleted:", messageId);
+      this.messageHistory.forEach((messages, key) => {
+        const index = messages.findIndex((m) => m.id === messageId);
+        if (index !== -1) {
+          messages.splice(index, 1);
+        }
+      });
+    });
+  }
+
+  sendDirectMessage(targetUserId, text, messageType = "text", mediaUrl = null) {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+
+    const message = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text,
+      type: messageType,
+      mediaUrl,
+      sender: this.currentUser,
+      timestamp: new Date().toISOString(),
+      private: true,
+      reactions: {},
+      read: false,
+    };
+
+    this.socket.emit("direct-message", {
+      to: targetUserId,
+      message,
+    });
+
+    if (this.currentUser) {
+      const conversationId = [this.currentUser.userId, targetUserId]
+        .sort()
+        .join("-");
+      if (!this.messageHistory.has(conversationId)) {
+        this.messageHistory.set(conversationId, []);
+      }
+      this.messageHistory.get(conversationId).push(message);
+    }
+
+    return message;
+  }
+
+  sendMessage(text, messageType = "text", mediaUrl = null) {
+    if (!this.currentRoom) return null;
+
+    const message = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text,
+      type: messageType,
+      mediaUrl,
+      roomId: this.currentRoom,
+      sender: this.currentUser,
+      timestamp: new Date().toISOString(),
+      reactions: {},
+    };
+
+    this.socket.emit("send-message", message);
+
+    if (!this.messageHistory.has(this.currentRoom)) {
+      this.messageHistory.set(this.currentRoom, []);
+    }
+    this.messageHistory.get(this.currentRoom).push(message);
+
+    return message;
+  }
+
+  addReaction(messageId, reaction) {
+    if (!this.socket?.connected) return;
+    this.socket.emit("message-reaction", {
+      messageId,
+      reaction,
+      userId: this.currentUser?.userId,
+    });
+  }
+
+  deleteMessage(messageId) {
+    if (!this.socket?.connected) return;
+    this.socket.emit("delete-message", {
+      messageId,
+      userId: this.currentUser?.userId,
+    });
+  }
+
+  getMessageHistory(key) {
+    return this.messageHistory.get(key) || [];
+  }
+
+  clearChatHistory(key) {
+    if (key) {
+      this.messageHistory.delete(key);
+    } else {
+      this.messageHistory.clear();
+    }
+  }
+
+  async startCall(targetUserId, callType = "video") {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+
+    let pc = this.peerConnections.get(targetUserId);
+    if (pc) {
+      pc.close();
+      this.peerConnections.delete(targetUserId);
+    }
+
+    this.currentCallType = callType;
+
+    return new Promise(async (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("Call initiation timeout"));
+      }, 30000);
+
+      try {
+        console.log(`📹 Setting up local stream for ${callType} call...`);
+        await this._setupLocalStream(callType === "video", true);
+        console.log("✅ Local stream setup complete");
+
+        const roomId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log(`📞 Initiating call to ${targetUserId}`);
+        this.socket.emit("initiate-call", {
+          targetUserId,
+          roomId,
+          callType,
+        });
+
+        console.log(`🚪 Joining room: ${roomId}`);
+        this.socket.emit("join-room", {
+          roomId,
+          callType,
+        });
+
+        this.socket.once("room-joined", (data) => {
+          clearTimeout(timeout);
+          console.log("Call started successfully:", data);
+          this.currentRoom = roomId;
+          resolve(data);
+        });
+
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error("❌ Error starting call:", error);
+        reject(error);
+      }
+    });
+  }
+
+  rejectCall(fromUserId, callType) {
+    if (!this.socket?.connected) return;
+    this.socket.emit("reject-call", {
+      from: fromUserId,
+      callType,
+    });
+    this.pendingCalls.delete(fromUserId);
+    if (this.pendingCallData?.from.userId === fromUserId) {
+      this.pendingCallData = null;
+    }
+  }
+
+  async acceptCall(roomId, callType) {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+
+    this.currentCallType = callType;
+    this.currentRoom = roomId;
+
+    return new Promise(async (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("Call acceptance timeout"));
+      }, 30000);
+
+      try {
+        console.log(`📹 Setting up local stream for ${callType} call...`);
+        await this._setupLocalStream(callType === "video", true);
+        console.log("✅ Local stream setup complete");
+
+        const callerUserId = Array.from(this.pendingCalls.keys())[0];
+        if (callerUserId) {
+          this.socket.emit("accept-call", {
+            from: callerUserId,
+            roomId,
+            callType,
+          });
+        }
+
+        this.socket.emit("join-room", {
+          roomId,
+          callType,
+        });
+
+        this.socket.once("room-joined", (data) => {
+          clearTimeout(timeout);
+          console.log("Call joined successfully:", data);
+          this.pendingCallData = null; // Clear pending call data
+          resolve(data);
+        });
+
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error("❌ Error accepting call:", error);
+        reject(error);
+      }
+    });
+  }
+
+  async _setupLocalStream(video = true, audio = true) {
+    if (this.localStream) {
+      const hasVideo = this.localStream.getVideoTracks().length > 0;
+      const hasAudio = this.localStream.getAudioTracks().length > 0;
+
+      if ((video && !hasVideo) || (!video && hasVideo)) {
+        console.log("Recreating stream for different media type");
+        this.localStream.getTracks().forEach((track) => track.stop());
+        this.localStream = null;
+      } else {
+        console.log("Using existing stream");
+        return this.localStream;
+      }
+    }
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Browser doesn't support video/audio");
+      }
+
+      console.log(`Requesting ${video ? "camera and " : ""}microphone access...`);
+
+      const constraints = {
+        video: video
+          ? {
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              facingMode: "user",
+              frameRate: { ideal: 30 },
+            }
+          : false,
+        audio: audio
+          ? {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 48000,
+              channelCount: 2,
+            }
+          : false,
+      };
+
+      console.log("Using constraints:", constraints);
+
+      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      console.log("✅ Media access granted!");
+      console.log("Video tracks:", this.localStream.getVideoTracks().length);
+      console.log("Audio tracks:", this.localStream.getAudioTracks().length);
+
+      this._setupAudioMonitoring();
+
+      return this.localStream;
+    } catch (error) {
+      console.error("❌ Media setup error:", error);
+
+      let errorMessage = "Failed to access camera/microphone";
+      if (error.name === "NotAllowedError") {
+        errorMessage = "Camera/Microphone access denied. Please allow permissions.";
+      } else if (error.name === "NotFoundError") {
+        errorMessage = "No camera or microphone found on this device.";
+      } else if (error.name === "NotReadableError") {
+        errorMessage = "Camera/Microphone is in use by another application.";
+      } else if (error.name === "OverconstrainedError") {
+        errorMessage = "Camera doesn't support required settings.";
+      }
+
+      throw new Error(errorMessage);
+    }
+  }
+
+  _setupAudioMonitoring() {
+    if (!this.localStream || !window.AudioContext) return;
+
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
+
+      const source = audioContext.createMediaStreamSource(this.localStream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const checkAudioLevel = () => {
+        if (!this.localStream || !this.socket?.connected) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        const normalizedLevel = average / 255;
+
+        this.onAudioLevelChange?.(normalizedLevel);
+
+        requestAnimationFrame(checkAudioLevel);
+      };
+
+      checkAudioLevel();
+    } catch (error) {
+      console.error("Error setting up audio monitoring:", error);
+    }
+  }
+
+  _createPeerConnection(userId) {
+    if (this.peerConnections.has(userId)) {
+      const oldPc = this.peerConnections.get(userId);
+      oldPc.close();
+      this.peerConnections.delete(userId);
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: this.config.iceServers,
+      iceCandidatePoolSize: this.config.iceCandidatePoolSize,
+    });
+
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => {
+        console.log(`Adding ${track.kind} track to peer connection for ${userId}`);
+        pc.addTrack(track, this.localStream);
+      });
+    }
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log(`❄️ Sending ICE candidate for ${userId}`);
+        this.socket.emit("ice-candidate", {
+          to: userId,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`❄️ ICE state with ${userId}:`, pc.iceConnectionState);
+
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        console.log(`✅ Connection established with ${userId}`);
+      } else if (pc.iceConnectionState === "failed") {
+        console.log(`❌ Connection failed with ${userId}`);
+        pc.restartIce();
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log(`📡 Received ${event.track.kind} track from:`, userId);
+      const [stream] = event.streams;
+
+      if (stream) {
+        console.log("Remote stream details:", {
+          id: stream.id,
+          active: stream.active,
+          videoTracks: stream.getVideoTracks().length,
+          audioTracks: stream.getAudioTracks().length,
+        });
+
+        this.remoteStreams.set(userId, stream);
+        this.onRemoteStream?.(userId, stream);
+      }
+    };
+
+    this.peerConnections.set(userId, pc);
+    return pc;
+  }
+
+  async _createOffer(userId) {
+    try {
+      let pc = this.peerConnections.get(userId);
+      if (!pc) {
+        pc = this._createPeerConnection(userId);
+      }
+
+      if (pc.signalingState !== "stable") {
+        console.log(`Signaling state not stable for ${userId}, current state:`, pc.signalingState);
+        
+        if (pc.signalingState === "have-local-offer") {
+          console.log("Waiting for local offer to be accepted...");
+          return;
+        }
+      }
+
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: this.currentCallType === "video",
+      });
+
+      await pc.setLocalDescription(offer);
+
+      console.log(`📞 Sending offer to user:`, userId);
+      this.socket.emit("offer", {
+        to: userId,
+        offer: pc.localDescription,
+      });
+
+      console.log("📞 Offer sent to:", userId);
+    } catch (error) {
+      console.error("Error creating offer:", error);
+    }
+  }
+
+  async _handleOffer(fromUserId, offer) {
+    try {
+      console.log(`Handling offer from user:`, fromUserId);
+
+      let pc = this.peerConnections.get(fromUserId);
+      if (!pc) {
+        pc = this._createPeerConnection(fromUserId);
+      }
+
+      if (pc.signalingState !== "stable") {
+        console.log(`Current signaling state: ${pc.signalingState}, waiting for stability`);
+        await new Promise(resolve => {
+          const checkState = () => {
+            if (pc.signalingState === "stable") {
+              resolve();
+            } else {
+              setTimeout(checkState, 100);
+            }
+          };
+          checkState();
+        });
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      console.log(`📞 Sending answer to user:`, fromUserId);
+      this.socket.emit("answer", {
+        to: fromUserId,
+        answer: pc.localDescription,
+      });
+
+      console.log("📞 Answer sent to:", fromUserId);
+    } catch (error) {
+      console.error("Error handling offer:", error);
+    }
+  }
+
+  _cleanupPeerConnection(userId) {
+    const pc = this.peerConnections.get(userId);
+    if (pc) {
+      pc.close();
+      this.peerConnections.delete(userId);
+    }
+    this.remoteStreams.delete(userId);
+
+    this.socketIdToUserId.forEach((value, key) => {
+      if (value === userId) {
+        this.socketIdToUserId.delete(key);
+      }
+    });
+  }
+
+  _handleStateChange(state, data) {
+    this.onConnectionStateChange?.({ state, data });
+  }
+
+  toggleAudio(enabled) {
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach((track) => {
+        track.enabled = enabled;
+      });
+      console.log(`🔊 Audio ${enabled ? "enabled" : "disabled"}`);
+    }
+  }
+
+  toggleVideo(enabled) {
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach((track) => {
+        track.enabled = enabled;
+      });
+      console.log(`📹 Video ${enabled ? "enabled" : "disabled"}`);
+    }
+  }
+
+  async startScreenShare() {
+    try {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        throw new Error("Screen sharing not supported");
+      }
+
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+
+      this.peerConnections.forEach((pc, userId) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) {
+          sender.replaceTrack(screenTrack);
+        }
+      });
+
+      screenTrack.onended = () => {
+        this.stopScreenShare();
+      };
+
+      this.socket.emit("screen-share-start", { roomId: this.currentRoom });
+
+      return screenStream;
+    } catch (error) {
+      console.error("Error starting screen share:", error);
+      throw error;
+    }
+  }
+
+  async stopScreenShare() {
+    if (this.localStream) {
+      const videoTrack = this.localStream.getVideoTracks()[0];
+
+      this.peerConnections.forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) {
+          sender.replaceTrack(videoTrack);
+        }
+      });
+    }
+
+    this.socket.emit("screen-share-stop", { roomId: this.currentRoom });
+  }
+
+  leaveRoom() {
+    if (this.socket && this.currentRoom) {
+      this.socket.emit("leave-room", this.currentRoom);
+    }
+
+    this.peerConnections.forEach((pc) => pc.close());
+    this.peerConnections.clear();
+    this.remoteStreams.clear();
+    this.pendingCalls.clear();
+    this.pendingCallData = null;
+
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
+    this.currentRoom = null;
+    this.currentCallType = null;
+  }
+
+  disconnect() {
+    this.leaveRoom();
+
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    this.socketIdToUserId.clear();
+    this.peerConnections.clear();
+    this.remoteStreams.clear();
+    this.pendingCalls.clear();
+    this.pendingCallData = null;
+    this.availableStaff = [];
+    this.directMessages = [];
+    this.messageHistory.clear();
+  }
+
+  isConnected() {
+    return this.socket?.connected || false;
+  }
+
+  getAvailableStaff() {
+    return this.availableStaff;
+  }
+
+  getDirectMessages() {
+    return this.directMessages;
+  }
+
+  getMessageHistory(key) {
+    return this.messageHistory.get(key) || [];
+  }
+
+  clearMessages(key) {
+    if (key) {
+      this.messageHistory.delete(key);
+      if (key === this.currentRoom) {
+        this.directMessages = this.directMessages.filter(
+          (m) => m.roomId !== key,
+        );
+      } else {
+        this.directMessages = this.directMessages.filter((m) => {
+          const conversationId = [m.sender?.userId, m.recipient?.userId]
+            .sort()
+            .join("-");
+          return conversationId !== key;
+        });
+      }
+    } else {
+      this.messageHistory.clear();
+      this.directMessages = [];
+    }
+  }
+
+  // New method to check for pending calls
+  hasPendingCall() {
+    return this.pendingCallData !== null;
+  }
+
+  // New method to get pending call data
+  getPendingCall() {
+    return this.pendingCallData;
+  }
+}
+
+const webRTCService = new WebRTCService();
+export default webRTCService;
