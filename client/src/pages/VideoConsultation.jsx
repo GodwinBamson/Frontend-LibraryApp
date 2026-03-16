@@ -5367,6 +5367,8 @@
 
 
 
+
+
 /* eslint-disable no-unused-vars */
 
 import { useEffect, useRef, useState, useMemo } from "react";
@@ -5874,7 +5876,7 @@ const VideoConsultation = () => {
   const enableAudio = () => {
     console.log('👆 User interaction - enabling audio');
     
-    // Unmute all video elements
+    // Unmute all video elements and enable tracks
     Object.values(remoteVideosRef.current).forEach(videoEl => {
       if (videoEl) {
         videoEl.muted = false;
@@ -5887,10 +5889,11 @@ const VideoConsultation = () => {
       }
     });
     
-    // Enable all audio tracks in remote streams
+    // Enable and unmute all audio tracks in remote streams
     Object.values(remoteStreams).forEach(stream => {
       stream.getAudioTracks().forEach(track => {
         track.enabled = true;
+        track.muted = false; // CRITICAL: Unmute the track itself
       });
     });
     
@@ -5925,7 +5928,7 @@ const VideoConsultation = () => {
       audioTracks.forEach((track, index) => {
         console.log(`  Audio track ${index}:`, {
           enabled: track.enabled,
-          muted: track.muted,
+          muted: track.muted,  // Track-level muted property
           readyState: track.readyState
         });
         
@@ -5934,9 +5937,18 @@ const VideoConsultation = () => {
           console.log(`🎤 Enabling audio track for ${userId}`);
           track.enabled = true;
         }
+        
+        // CRITICAL: Also unmute the track itself
+        if (track.muted) {
+          console.log(`🔊 Unmuting audio track for ${userId}`);
+          track.muted = false;
+        }
       });
 
-      setAudioEnabled(prev => ({ ...prev, [userId]: audioTracks.some(t => t.enabled) }));
+      setAudioEnabled(prev => ({ 
+        ...prev, 
+        [userId]: audioTracks.some(t => t.enabled && !t.muted) 
+      }));
     });
 
     // Also check video elements for muted state
@@ -5988,9 +6000,10 @@ const VideoConsultation = () => {
           videoEl.srcObject = stream;
           videoEl.muted = false;
           
-          // Enable audio tracks
+          // Enable and unmute audio tracks
           stream.getAudioTracks().forEach(track => {
             track.enabled = true;
+            track.muted = false;
           });
           
           // Log stream details
@@ -5999,7 +6012,8 @@ const VideoConsultation = () => {
             videoEnabled: stream.getVideoTracks()[0]?.enabled,
             videoReadyState: stream.getVideoTracks()[0]?.readyState,
             audioTracks: stream.getAudioTracks().length,
-            audioEnabled: stream.getAudioTracks().map(t => t.enabled)
+            audioEnabled: stream.getAudioTracks().map(t => t.enabled),
+            audioMuted: stream.getAudioTracks().map(t => t.muted)
           });
           
           videoEl.play().catch(e => {
@@ -6100,7 +6114,8 @@ const VideoConsultation = () => {
         videoTracks: stream.getVideoTracks().length,
         audioTracks: stream.getAudioTracks().length,
         active: stream.active,
-        audioEnabled: stream.getAudioTracks().map(t => t.enabled)
+        audioEnabled: stream.getAudioTracks().map(t => t.enabled),
+        audioMuted: stream.getAudioTracks().map(t => t.muted)
       });
       
       setRemoteStreams((prev) => {
@@ -6690,6 +6705,7 @@ const VideoConsultation = () => {
     Object.values(remoteStreams).forEach(stream => {
       stream.getAudioTracks().forEach(track => {
         track.enabled = newState;
+        track.muted = !newState;
       });
     });
   };
@@ -7487,12 +7503,17 @@ const VideoConsultation = () => {
                       (p) => p.userId === userId,
                     );
                     const videoTracks = stream.getVideoTracks().length;
-                    const audioTracks = stream.getAudioTracks().length;
                     
                     return (
                       <div
                         key={userId}
-                        className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video video-container"
+                        className="relative bg-gray-800 rounded-lg overflow-hidden"
+                        style={{
+                          aspectRatio: "16/9",
+                          minHeight: "300px",
+                          border: "2px solid #4a5568",
+                          backgroundColor: "#000"
+                        }}
                       >
                         <video
                           ref={(el) => {
@@ -7505,14 +7526,18 @@ const VideoConsultation = () => {
                                   
                                   el.srcObject = stream;
                                   
-                                  // CRITICAL: Ensure audio is unmuted
+                                  // CRITICAL: Ensure audio is unmuted at both levels
                                   el.muted = false;
                                   el.volume = 1.0;
                                   
-                                  // Enable all audio tracks
+                                  // Enable and unmute all audio tracks
                                   stream.getAudioTracks().forEach(track => {
                                     track.enabled = true;
-                                    console.log(`🔊 Audio track enabled for ${userId}:`, track.enabled);
+                                    track.muted = false; // Unmute at track level
+                                    console.log(`🔊 Audio track for ${userId}:`, {
+                                      enabled: track.enabled,
+                                      muted: track.muted
+                                    });
                                   });
                                   
                                   // Play with error handling
@@ -7524,19 +7549,24 @@ const VideoConsultation = () => {
                                         
                                         // Double-check audio after play starts
                                         setTimeout(() => {
+                                          // Check video element
                                           if (el.muted) {
-                                            console.log(`🔊 Unmuting video for ${userId} after play`);
+                                            console.log(`🔊 Unmuting video element for ${userId} after play`);
                                             el.muted = false;
                                           }
+                                          
+                                          // Check tracks
                                           stream.getAudioTracks().forEach(track => {
-                                            if (!track.enabled) {
-                                              console.log(`🔊 Enabling audio track for ${userId} after play`);
+                                            if (!track.enabled || track.muted) {
+                                              console.log(`🔊 Fixing audio track for ${userId} after play`);
                                               track.enabled = true;
+                                              track.muted = false;
                                             }
                                           });
+                                          
                                           setAudioEnabled(prev => ({ 
                                             ...prev, 
-                                            [userId]: stream.getAudioTracks().some(t => t.enabled) 
+                                            [userId]: stream.getAudioTracks().some(t => t.enabled && !t.muted) 
                                           }));
                                         }, 500);
                                       })
