@@ -200,8 +200,6 @@
 // }
 
 
-
-
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
 
@@ -379,6 +377,19 @@ export default function PDFReader({
     }
   };
 
+  // Function to open PDF in system viewer (best for mobile)
+  const openInSystemViewer = () => {
+    const urlToOpen = fallbackUrl || pdfUrl;
+    window.location.href = urlToOpen;
+  };
+
+  // Function to copy PDF link to clipboard
+  const copyLinkToClipboard = () => {
+    const urlToCopy = fallbackUrl || pdfUrl;
+    navigator.clipboard.writeText(urlToCopy);
+    alert('PDF link copied to clipboard!');
+  };
+
   // Get Google Docs viewer URL
   const getGoogleViewerUrl = () => {
     const urlToUse = fallbackUrl || pdfUrl || pdfData;
@@ -397,8 +408,8 @@ export default function PDFReader({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md">
+      <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 text-center">
             {isMobile ? "Loading PDF for mobile..." : "Loading PDF Reader..."}
@@ -421,8 +432,8 @@ export default function PDFReader({
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md">
+      <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
           <div className="text-red-600 text-center mb-4">
             <svg
               className="h-16 w-16 mx-auto"
@@ -441,58 +452,64 @@ export default function PDFReader({
           <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">
             Failed to Load PDF
           </h3>
-          <p className="text-gray-600 mb-4 text-center">{error}</p>
+          <p className="text-gray-600 mb-4 text-center text-sm">{error}</p>
           
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {/* Primary options for mobile */}
             {isMobile && (
               <>
                 <button
-                  onClick={retryWithGoogleViewer}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  onClick={openInSystemViewer}
+                  className="w-full px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
                 >
-                  Try Google Viewer (Recommended)
+                  📱 Open in System Viewer (Best for Mobile)
                 </button>
                 
-                {bookId && (
-                  <button
-                    onClick={retryWithProxy}
-                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Retry with Mobile Proxy
-                  </button>
-                )}
-                
-                {mobileRedirectUrl && (
-                  <button
-                    onClick={retryWithMobileRedirect}
-                    className="w-full px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
-                  >
-                    Open in Browser
-                  </button>
-                )}
+                <button
+                  onClick={retryWithGoogleViewer}
+                  className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                >
+                  📄 Try Google Viewer
+                </button>
               </>
             )}
             
-            <button
-              onClick={downloadPdf}
-              className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              Download PDF
-            </button>
-            
-            <button
-              onClick={openInNewTab}
-              className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-            >
-              Open in New Tab
-            </button>
+            {/* Secondary options */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={downloadPdf}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+              >
+                Download
+              </button>
+              
+              <button
+                onClick={openInNewTab}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+              >
+                New Tab
+              </button>
+              
+              <button
+                onClick={copyLinkToClipboard}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm col-span-2"
+              >
+                Copy Link
+              </button>
+            </div>
             
             <button
               onClick={onClose}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
             >
               Close
             </button>
+          </div>
+          
+          {/* Debug info for testing */}
+          <div className="mt-4 text-xs text-gray-400 border-t pt-2">
+            <p>URL: {pdfUrl?.substring(0, 50)}...</p>
+            <p>Book ID: {bookId}</p>
           </div>
         </div>
       </div>
@@ -537,13 +554,36 @@ export default function PDFReader({
         </div>
         
         <div className="flex items-center space-x-2 flex-wrap gap-2">
+          {isMobile && (
+            <button
+              onClick={openInSystemViewer}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-md text-sm font-medium"
+              title="Open in system PDF viewer (best for mobile)"
+            >
+              <svg
+                className="h-4 w-4 inline mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              Open
+            </button>
+          )}
+          
           {isMobile && !useGoogleViewer && (
             <button
               onClick={retryWithGoogleViewer}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-medium"
               title="Try Google Viewer for better mobile compatibility"
             >
-              Google Viewer
+              Google
             </button>
           )}
           
@@ -613,7 +653,7 @@ export default function PDFReader({
       {isMobile && !useGoogleViewer && (
         <div className="bg-yellow-50 border-t px-4 py-2 text-xs text-gray-600 flex flex-wrap justify-between items-center gap-2">
           <span>
-            💡 Having trouble? Try the Google Viewer button or Download.
+            💡 Having trouble? Try the "Open" button or Google Viewer.
           </span>
           <div className="flex gap-2">
             {bookId && (
