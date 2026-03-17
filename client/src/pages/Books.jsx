@@ -317,7 +317,7 @@ export default function Books() {
   const [isMobile, setIsMobile] = useState(false);
   const user = JSON.parse(localStorage.getItem("user"));
 
-  // Detect mobile device on component mount
+  // Detect mobile device
   useEffect(() => {
     const mobile = /iPhone|iPad|iPod|Android|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent);
     setIsMobile(mobile);
@@ -384,19 +384,19 @@ export default function Books() {
   // Handle PDF viewing based on device
   const handleRead = (pdfUrl, bookTitle, bookId) => {
     if (isMobile) {
-      // MOBILE: Open directly in new tab (most reliable)
+      // MOBILE: Open in new tab (most reliable)
       window.open(pdfUrl, '_blank');
     } else {
-      // DESKTOP: Use built-in viewer (works perfectly as shown in logs)
+      // DESKTOP: Use built-in viewer
       setSelectedPdf({ url: pdfUrl, title: bookTitle, bookId });
     }
   };
 
-  // Handle download for mobile
+  // Handle download
   const handleDownload = (pdfUrl, bookTitle) => {
     const link = document.createElement('a');
     link.href = pdfUrl;
-    link.download = `${bookTitle}.pdf`;
+    link.download = `${bookTitle.replace(/[^a-z0-9]/gi, '_')}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -418,15 +418,16 @@ export default function Books() {
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-medium">📱 Mobile Mode</span>
+                <span className="font-medium">📱 Mobile Mode Active</span>
               </div>
               <p className="text-sm mt-1 ml-8">
-                PDFs will open in a new tab for best experience
+                PDFs will open in a new tab for the best experience on your device
               </p>
             </div>
           )}
         </div>
 
+        {/* Search and filter */}
         <div className="mb-6 flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <input
@@ -453,6 +454,7 @@ export default function Books() {
           </div>
         </div>
 
+        {/* Books grid */}
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
