@@ -314,7 +314,15 @@ export default function Books() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [selectedPdf, setSelectedPdf] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   const user = JSON.parse(localStorage.getItem("user"));
+
+  // Detect mobile on component mount
+  useEffect(() => {
+    const mobile = /iPhone|iPad|iPod|Android|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent);
+    setIsMobile(mobile);
+    console.log("📱 Device is mobile:", mobile);
+  }, []);
 
   useEffect(() => {
     fetchBooks();
@@ -369,35 +377,42 @@ export default function Books() {
     }
   };
 
+  // Handle PDF viewing based on device
   const handleRead = (pdfUrl, bookTitle, bookId) => {
-    // Check if it's a mobile device
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    // Get base URL
     const baseUrl = import.meta.env.PROD 
       ? "https://library-server-5rpq.onrender.com" 
       : "http://localhost:5000";
     
     if (isMobile) {
-      // For mobile, give user a choice
-      if (window.confirm("How would you like to open the PDF?\n\nOK = Try built-in viewer\nCancel = Open directly in browser")) {
-        // Try proxy first
+      // MOBILE: Give user clear options
+      const action = window.confirm(
+        "📱 PDF Options:\n\n" +
+        "✅ OK = Open in Browser (Recommended)\n" +
+        "❌ Cancel = Try Built-in Viewer"
+      );
+      
+      if (action) {
+        // Open directly in browser - most reliable for mobile
+        window.open(pdfUrl, '_blank');
+      } else {
+        // Try the built-in viewer
         setSelectedPdf({ 
           url: `${baseUrl}/api/pdf-proxy/${bookId}`, 
           title: bookTitle, 
           bookId,
           fallbackUrl: pdfUrl,
-          mobileRedirectUrl: `${baseUrl}/api/mobile-pdf/${bookId}`,
-          testDirectUrl: `${baseUrl}/api/test-direct/${bookId}`
+          isMobile: true
         });
-      } else {
-        // Direct open in browser (most reliable for mobile)
-        window.open(pdfUrl, '_blank');
       }
     } else {
-      // Desktop - direct URL works fine
+      // DESKTOP: Use built-in viewer
       setSelectedPdf({ url: pdfUrl, title: bookTitle, bookId });
     }
+  };
+
+  // Direct open for mobile (no confirmation)
+  const handleDirectOpen = (pdfUrl) => {
+    window.open(pdfUrl, '_blank');
   };
 
   return (
@@ -408,6 +423,11 @@ export default function Books() {
           <p className="text-gray-600 mt-2">
             Browse, borrow, and read books from our collection
           </p>
+          {isMobile && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-md text-sm">
+              📱 Mobile mode active - PDFs will open in a new tab for best experience
+            </div>
+          )}
         </div>
 
         <div className="mb-6 flex flex-col md:flex-row gap-4">
@@ -443,103 +463,102 @@ export default function Books() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {books.map((book) => {
-              const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-              
-              return (
-                <div
-                  key={book._id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-                >
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-                        {book.category}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {book.availableCopies} of {book.totalCopies} available
-                      </span>
-                    </div>
+            {books.map((book) => (
+              <div
+                key={book._id}
+                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+                      {book.category}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {book.availableCopies} of {book.totalCopies} available
+                    </span>
+                  </div>
 
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      <Link
-                        to={`/books/${book._id}`}
-                        className="hover:text-indigo-600"
-                      >
-                        {book.title}
-                      </Link>
-                    </h3>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    <Link
+                      to={`/books/${book._id}`}
+                      className="hover:text-indigo-600"
+                    >
+                      {book.title}
+                    </Link>
+                  </h3>
 
-                    <p className="text-gray-600 mb-1">by {book.author}</p>
-                    <p className="text-sm text-gray-500 mb-4">
-                      ISBN: {book.isbn}
-                    </p>
+                  <p className="text-gray-600 mb-1">by {book.author}</p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    ISBN: {book.isbn}
+                  </p>
 
-                    <p className="text-gray-700 line-clamp-3 mb-6">
-                      {book.description}
-                    </p>
+                  <p className="text-gray-700 line-clamp-3 mb-6">
+                    {book.description}
+                  </p>
 
-                    <div className="flex flex-col gap-3">
-                      {/* PDF Read Online Section */}
-                      {(book.pdfUrl || book.pdfFile) && (
-                        <>
-                          <div className="flex items-center justify-between bg-green-50 p-3 rounded-md border border-green-200">
-                            <div className="flex items-center">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5 text-green-600 mr-2"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                                />
-                              </svg>
-                              <span className="text-sm text-gray-700">
-                                PDF Available
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => handleRead(
-                                book.pdfUrl || book.pdfFile, 
-                                book.title, 
-                                book._id
-                              )}
-                              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                  <div className="flex flex-col gap-3">
+                    {/* PDF Read Online Section */}
+                    {(book.pdfUrl || book.pdfFile) && (
+                      <div className="space-y-2">
+                        {/* Main PDF Button */}
+                        <div className="flex items-center justify-between bg-green-50 p-3 rounded-md border border-green-200">
+                          <div className="flex items-center">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5 text-green-600 mr-2"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
                             >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4 mr-1"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                />
-                              </svg>
-                              Read Online
-                            </button>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                              />
+                            </svg>
+                            <span className="text-sm text-gray-700">
+                              PDF Available
+                            </span>
                           </div>
-                          
-                          {/* Mobile direct download/Open button - only shows on mobile */}
-                          {isMobile && (
+                          <button
+                            onClick={() => handleRead(
+                              book.pdfUrl || book.pdfFile, 
+                              book.title, 
+                              book._id
+                            )}
+                            className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4 mr-1"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                            {isMobile ? "Open PDF" : "Read Online"}
+                          </button>
+                        </div>
+                        
+                        {/* Mobile-specific buttons */}
+                        {isMobile && (
+                          <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => window.open(book.pdfUrl || book.pdfFile, '_blank')}
-                              className="w-full mt-2 px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
+                              className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -555,36 +574,62 @@ export default function Books() {
                                   d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                                 />
                               </svg>
-                              📱 Open PDF Directly (Best for Mobile)
+                              Open in Browser
                             </button>
-                          )}
-                        </>
-                      )}
-
-                      {/* Borrow Section */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
-                          Published: {book.publishedYear}
-                        </div>
-                        {user?.role === "student" &&
-                          (book.availableCopies > 0 ? (
+                            
                             <button
-                              onClick={() => handleBorrow(book._id)}
-                              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                              onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = book.pdfUrl || book.pdfFile;
+                                link.download = `${book.title}.pdf`;
+                                link.click();
+                              }}
+                              className="px-3 py-2 bg-purple-600 text-white text-xs font-medium rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center"
                             >
-                              Borrow
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 mr-1"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                />
+                              </svg>
+                              Download
                             </button>
-                          ) : (
-                            <span className="px-4 py-2 bg-gray-300 text-gray-600 text-sm font-medium rounded-md cursor-not-allowed">
-                              Unavailable
-                            </span>
-                          ))}
+                          </div>
+                        )}
                       </div>
+                    )}
+
+                    {/* Borrow Section */}
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="text-sm text-gray-500">
+                        Published: {book.publishedYear}
+                      </div>
+                      {user?.role === "student" &&
+                        (book.availableCopies > 0 ? (
+                          <button
+                            onClick={() => handleBorrow(book._id)}
+                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                          >
+                            Borrow
+                          </button>
+                        ) : (
+                          <span className="px-4 py-2 bg-gray-300 text-gray-600 text-sm font-medium rounded-md cursor-not-allowed">
+                            Unavailable
+                          </span>
+                        ))}
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
 
@@ -597,15 +642,13 @@ export default function Books() {
         )}
       </div>
 
-      {/* PDF Reader Modal */}
-      {selectedPdf && (
+      {/* PDF Reader Modal - Only for desktop */}
+      {selectedPdf && !isMobile && (
         <PDFReader
           pdfUrl={selectedPdf.url}
           bookTitle={selectedPdf.title}
           bookId={selectedPdf.bookId}
           fallbackUrl={selectedPdf.fallbackUrl}
-          mobileRedirectUrl={selectedPdf.mobileRedirectUrl}
-          testDirectUrl={selectedPdf.testDirectUrl}
           onClose={() => setSelectedPdf(null)}
         />
       )}
