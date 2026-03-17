@@ -202,8 +202,6 @@
 
 
 
-
-
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
 
@@ -223,39 +221,43 @@ export default function PDFReader({
   const [pdfData, setPdfData] = useState(null);
   const [useGoogleViewer, setUseGoogleViewer] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const iframeRef = useRef(null);
   const navigate = useNavigate();
 
   // Detect mobile device
   useEffect(() => {
-    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const mobile = /iPhone|iPad|iPod|Android|BlackBerry|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
     setIsMobile(mobile);
-    console.log("📱 Device detected:", mobile ? "Mobile" : "Desktop");
+    console.log("📱 Device Info:", {
+      userAgent: navigator.userAgent,
+      isMobile: mobile,
+      platform: navigator.platform,
+      vendor: navigator.vendor
+    });
   }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     
-    console.log("PDF Reader mounted with URL:", pdfUrl);
-    console.log("Is mobile:", isMobile);
+    console.log("📄 PDF Reader mounted with URL:", pdfUrl);
+    console.log("📱 Is mobile:", isMobile);
 
     // For Cloudinary URLs (production)
     if (pdfUrl && pdfUrl.includes("cloudinary.com")) {
-      console.log("📄 Cloudinary URL detected");
+      console.log("☁️ Cloudinary URL detected");
       
-      // For mobile, we might want to use proxy or special parameters
-      if (isMobile) {
-        // Add mobile-friendly parameters to Cloudinary URL
-        const mobileFriendlyUrl = pdfUrl.includes('?') 
-          ? `${pdfUrl}&fl_attachment=false#toolbar=0&navpanes=0&scrollbar=0&view=FitH`
-          : `${pdfUrl}?fl_attachment=false#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
-        
-        setPdfData(mobileFriendlyUrl);
+      // Add mobile-friendly parameters
+      let finalUrl = pdfUrl;
+      
+      // Add fl_attachment=false to prevent download, and viewer parameters
+      if (pdfUrl.includes('?')) {
+        finalUrl = `${pdfUrl}&fl_attachment=false#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
       } else {
-        // Desktop - add viewer parameters
-        setPdfData(`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`);
+        finalUrl = `${pdfUrl}?fl_attachment=false#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
       }
       
+      setPdfData(finalUrl);
       setLoading(false);
       return;
     }
@@ -269,7 +271,7 @@ export default function PDFReader({
     const fetchPdf = async () => {
       try {
         setLoading(true);
-        console.log("Fetching PDF from:", pdfUrl);
+        console.log("📥 Fetching PDF from:", pdfUrl);
 
         const response = await fetch(pdfUrl, {
           headers: {
@@ -287,7 +289,7 @@ export default function PDFReader({
         setPdfData(url);
         setLoading(false);
       } catch (err) {
-        console.error("PDF loading error:", err);
+        console.error("❌ PDF loading error:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -304,19 +306,21 @@ export default function PDFReader({
 
   // Handle iframe errors
   const handleIframeError = () => {
-    console.log("Iframe failed to load PDF");
-    setError("Failed to load PDF in viewer");
+    console.log("❌ Iframe failed to load PDF");
+    setError("Failed to load PDF in viewer. Your browser may not support embedded PDFs.");
     setLoading(false);
     
     // Auto-try Google Viewer for mobile after error
-    if (isMobile) {
+    if (isMobile && !useGoogleViewer) {
+      console.log("🔄 Auto-switching to Google Viewer for mobile");
       setUseGoogleViewer(true);
     }
   };
 
   const handleIframeLoad = () => {
-    console.log("Iframe loaded successfully");
+    console.log("✅ Iframe loaded successfully");
     setLoading(false);
+    setError("");
   };
 
   // Function to open in new tab
@@ -333,7 +337,6 @@ export default function PDFReader({
       }
 
       window.open(viewerUrl, "_blank");
-      // Don't close automatically - let user decide
     }
   };
 
@@ -369,10 +372,19 @@ export default function PDFReader({
     }
   };
 
+  // Function to retry with mobile redirect
+  const retryWithMobileRedirect = () => {
+    if (mobileRedirectUrl) {
+      window.location.href = mobileRedirectUrl;
+    }
+  };
+
   // Get Google Docs viewer URL
   const getGoogleViewerUrl = () => {
     const urlToUse = fallbackUrl || pdfUrl || pdfData;
-    return `https://docs.google.com/viewer?url=${encodeURIComponent(urlToUse)}&embedded=true`;
+    // Make sure URL is properly encoded
+    const encodedUrl = encodeURIComponent(urlToUse);
+    return `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`;
   };
 
   // Determine which URL to display
@@ -386,15 +398,21 @@ export default function PDFReader({
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-xl">
+        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">
+          <p className="mt-4 text-gray-600 text-center">
             {isMobile ? "Loading PDF for mobile..." : "Loading PDF Reader..."}
           </p>
           {isMobile && (
-            <p className="text-sm text-gray-500 mt-2">
-              This may take a moment on mobile devices
-            </p>
+            <div className="mt-4 text-sm text-gray-500 text-center">
+              <p>This may take a moment on mobile devices</p>
+              <button
+                onClick={downloadPdf}
+                className="mt-3 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 w-full"
+              >
+                Download Instead
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -420,28 +438,39 @@ export default function PDFReader({
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">
             Failed to Load PDF
           </h3>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-gray-600 mb-4 text-center">{error}</p>
           
           <div className="space-y-2">
-            {isMobile && bookId && (
-              <button
-                onClick={retryWithProxy}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-              >
-                Retry with Mobile Proxy
-              </button>
-            )}
-            
             {isMobile && (
-              <button
-                onClick={retryWithGoogleViewer}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Try Google Viewer
-              </button>
+              <>
+                <button
+                  onClick={retryWithGoogleViewer}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Try Google Viewer (Recommended)
+                </button>
+                
+                {bookId && (
+                  <button
+                    onClick={retryWithProxy}
+                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Retry with Mobile Proxy
+                  </button>
+                )}
+                
+                {mobileRedirectUrl && (
+                  <button
+                    onClick={retryWithMobileRedirect}
+                    className="w-full px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                  >
+                    Open in Browser
+                  </button>
+                )}
+              </>
             )}
             
             <button
@@ -473,7 +502,7 @@ export default function PDFReader({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col">
       {/* PDF Toolbar */}
-      <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between">
+      <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-4">
           <button
             onClick={onClose}
@@ -494,10 +523,10 @@ export default function PDFReader({
               />
             </svg>
           </button>
-          <span className="font-medium truncate max-w-md">{bookTitle || "PDF Reader"}</span>
+          <span className="font-medium truncate max-w-xs md:max-w-md">{bookTitle || "PDF Reader"}</span>
           {isMobile && (
             <span className="bg-purple-600 text-xs px-2 py-1 rounded-full">
-              Mobile View
+              📱 Mobile
             </span>
           )}
           {useGoogleViewer && (
@@ -507,7 +536,7 @@ export default function PDFReader({
           )}
         </div>
         
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
           {isMobile && !useGoogleViewer && (
             <button
               onClick={retryWithGoogleViewer}
@@ -581,19 +610,29 @@ export default function PDFReader({
       </div>
 
       {/* Mobile Instructions */}
-      {isMobile && (
-        <div className="bg-yellow-50 border-t px-4 py-2 text-xs text-gray-600 flex justify-between items-center">
+      {isMobile && !useGoogleViewer && (
+        <div className="bg-yellow-50 border-t px-4 py-2 text-xs text-gray-600 flex flex-wrap justify-between items-center gap-2">
           <span>
-            💡 Having trouble? Try the Google Viewer button above or Download.
+            💡 Having trouble? Try the Google Viewer button or Download.
           </span>
-          {bookId && (
-            <button
-              onClick={retryWithProxy}
-              className="text-purple-600 hover:text-purple-800 font-medium"
-            >
-              Retry with Proxy
-            </button>
-          )}
+          <div className="flex gap-2">
+            {bookId && (
+              <button
+                onClick={retryWithProxy}
+                className="text-purple-600 hover:text-purple-800 font-medium"
+              >
+                Proxy
+              </button>
+            )}
+            {mobileRedirectUrl && (
+              <button
+                onClick={retryWithMobileRedirect}
+                className="text-orange-600 hover:text-orange-800 font-medium"
+              >
+                Browser
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
