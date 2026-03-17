@@ -147,7 +147,8 @@ export default function Books() {
 
                   <div className="flex flex-col gap-3">
                     {/* PDF Read Online Section */}
-                    {book.pdfUrl && (
+
+                    {/* {book.pdfUrl && (
                       <div className="flex items-center justify-between bg-green-50 p-3 rounded-md border border-green-200">
                         <div className="flex items-center">
                           <svg
@@ -195,7 +196,60 @@ export default function Books() {
                           Read Online
                         </button>
                       </div>
-                    )}
+                    )} */}
+
+
+
+                      {/* PDF Read Online Section - Check both pdfUrl and pdfFile */}
+{(book.pdfUrl || book.pdfFile) && (
+  <div className="flex items-center justify-between bg-green-50 p-3 rounded-md border border-green-200">
+    <div className="flex items-center">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-5 w-5 text-green-600 mr-2"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
+      </svg>
+      <span className="text-sm text-gray-700">
+        PDF Available
+      </span>
+    </div>
+    <button
+      onClick={() => handleRead(book.pdfUrl || book.pdfFile, book.title)}
+      className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-4 w-4 mr-1"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+        />
+      </svg>
+      Read Online
+    </button>
+  </div>
+)}
 
                     {/* Borrow Section */}
                     <div className="flex items-center justify-between">
