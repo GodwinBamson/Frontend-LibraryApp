@@ -213,7 +213,9 @@ export default function PDFReader({
   bookId,
   fallbackUrl,
   mobileRedirectUrl 
-}) {
+}) 
+
+{
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pdfData, setPdfData] = useState(null);
