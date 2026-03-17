@@ -383,37 +383,16 @@ export default function Books() {
 
   // Handle PDF viewing based on device
   const handleRead = (pdfUrl, bookTitle, bookId) => {
-    const baseUrl = import.meta.env.PROD 
-      ? "https://library-server-5rpq.onrender.com" 
-      : "http://localhost:5000";
-    
     if (isMobile) {
-      // MOBILE: Show options dialog
-      const option = window.confirm(
-        "📱 Choose PDF option:\n\n" +
-        "✅ OK = Open in Browser (Recommended)\n" +
-        "❌ Cancel = Open in App Viewer"
-      );
-      
-      if (option) {
-        // Open in browser (most reliable)
-        window.open(pdfUrl, '_blank');
-      } else {
-        // Try built-in viewer
-        setSelectedPdf({ 
-          url: pdfUrl, 
-          title: bookTitle, 
-          bookId,
-          isMobile: true
-        });
-      }
+      // MOBILE: Open directly in new tab (most reliable)
+      window.open(pdfUrl, '_blank');
     } else {
-      // DESKTOP: Use built-in viewer
+      // DESKTOP: Use built-in viewer (works perfectly as shown in logs)
       setSelectedPdf({ url: pdfUrl, title: bookTitle, bookId });
     }
   };
 
-  // Direct download function
+  // Handle download for mobile
   const handleDownload = (pdfUrl, bookTitle) => {
     const link = document.createElement('a');
     link.href = pdfUrl;
@@ -439,10 +418,10 @@ export default function Books() {
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-medium">Mobile Mode Active</span>
+                <span className="font-medium">📱 Mobile Mode</span>
               </div>
               <p className="text-sm mt-1 ml-8">
-                PDFs will open in a new tab for the best experience on your device.
+                PDFs will open in a new tab for best experience
               </p>
             </div>
           )}
@@ -566,55 +545,32 @@ export default function Books() {
                                   d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                                 />
                               </svg>
-                              {isMobile ? "Open PDF" : "Read Online"}
+                              {isMobile ? "📱 Open PDF" : "Read Online"}
                             </button>
                           </div>
                           
-                          {/* Mobile-specific action buttons */}
+                          {/* Mobile download button */}
                           {isMobile && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                onClick={() => window.open(pdfUrl, '_blank')}
-                                className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
+                            <button
+                              onClick={() => handleDownload(pdfUrl, book.title)}
+                              className="w-full px-3 py-2 bg-purple-600 text-white text-xs font-medium rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 mr-1"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
                               >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-4 w-4 mr-1"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                  />
-                                </svg>
-                                Open in Browser
-                              </button>
-                              
-                              <button
-                                onClick={() => handleDownload(pdfUrl, book.title)}
-                                className="px-3 py-2 bg-purple-600 text-white text-xs font-medium rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-4 w-4 mr-1"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                  />
-                                </svg>
-                                Download
-                              </button>
-                            </div>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                />
+                              </svg>
+                              Download PDF
+                            </button>
                           )}
                         </div>
                       )}
@@ -655,13 +611,12 @@ export default function Books() {
         )}
       </div>
 
-      {/* PDF Reader Modal - Only show on desktop or when specifically requested */}
-      {selectedPdf && (
+      {/* PDF Reader Modal - Desktop only */}
+      {selectedPdf && !isMobile && (
         <PDFReader
           pdfUrl={selectedPdf.url}
           bookTitle={selectedPdf.title}
           bookId={selectedPdf.bookId}
-          isMobile={selectedPdf.isMobile}
           onClose={() => setSelectedPdf(null)}
         />
       )}
